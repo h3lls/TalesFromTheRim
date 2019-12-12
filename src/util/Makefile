@@ -1,0 +1,68 @@
+# Generated automatically from Makefile.in by configure.
+# EmpireMUD 2.0 Makefile.in - Makefile template used by 'configure'
+# Based upon CircleMUD 3.0 Makefile.in
+# for the 'util' directory
+
+# C compiler to use
+CC = gcc
+
+# Any special flags you want to pass to the compiler
+MYFLAGS = -Wall -Wno-char-subscripts -DEMPIRE_UTIL
+
+#flags for profiling (see hacker.doc for more information)
+PROFILE = 
+
+##############################################################################
+# Do Not Modify Anything Below This Line (unless you know what you're doing) #
+##############################################################################
+
+# binary destination directory
+BINDIR = ../../bin
+# location of world files
+WLDDIR = ../../lib/world/wld
+# location of Empire include files
+INCDIR = ..
+
+CFLAGS = -g -O2 $(MYFLAGS) $(PROFILE) -I$(INCDIR)
+
+LIBS = -lcrypt -lm
+
+default: all
+
+all: $(BINDIR)/cryptpasswd $(WLDDIR)/map $(BINDIR)/sign \
+	$(BINDIR)/plrconv-20b1-to-20b2 $(BINDIR)/plrconv-20b2-to-20b3 \
+	$(BINDIR)/plrconv-20b3-to-ascii
+
+cryptpasswd: $(BINDIR)/cryptpasswd
+
+map: $(WLDDIR)/map
+
+plrconv-20b1-to-20b2: $(BINDIR)/plrconv-20b1-to-20b2
+
+plrconv-20b2-to-20b3: $(BINDIR)/plrconv-20b2-to-20b3
+
+plrconv-20b3-to-ascii: $(BINDIR)/plrconv-20b3-to-ascii
+
+sign: $(BINDIR)/sign
+
+$(BINDIR)/cryptpasswd: cryptpasswd.c $(INCDIR)/conf.h $(INCDIR)/sysdep.h \
+	$(INCDIR)/structs.h $(INCDIR)/utils.h
+	$(CC) $(CFLAGS) -o $(BINDIR)/cryptpasswd cryptpasswd.c $(LIBS)
+
+$(WLDDIR)/map: map.c $(INCDIR)/conf.h $(INCDIR)/sysdep.h $(INCDIR)/structs.h
+	$(CC) $(CFLAGS) -o $(WLDDIR)/map map.c $(LIBS)
+
+$(BINDIR)/plrconv-20b1-to-20b2: plrconv-20b1-to-20b2.c $(INCDIR)/conf.h \
+	$(INCDIR)/sysdep.h $(INCDIR)/structs.h $(INCDIR)/utils.h
+	$(CC) $(CFLAGS) -o $(BINDIR)/plrconv-20b1-to-20b2 plrconv-20b1-to-20b2.c $(LIBS)
+
+$(BINDIR)/plrconv-20b2-to-20b3: plrconv-20b2-to-20b3.c $(INCDIR)/conf.h \
+	$(INCDIR)/sysdep.h $(INCDIR)/structs.h $(INCDIR)/utils.h
+	$(CC) $(CFLAGS) -o $(BINDIR)/plrconv-20b2-to-20b3 plrconv-20b2-to-20b3.c $(LIBS)
+
+$(BINDIR)/plrconv-20b3-to-ascii: plrconv-20b3-to-ascii.c $(INCDIR)/conf.h \
+	$(INCDIR)/sysdep.h $(INCDIR)/structs.h $(INCDIR)/utils.h
+	$(CC) $(CFLAGS) -o $(BINDIR)/plrconv-20b3-to-ascii plrconv-20b3-to-ascii.c $(LIBS)
+
+$(BINDIR)/sign: sign.c $(INCDIR)/conf.h $(INCDIR)/sysdep.h
+	$(CC) $(CFLAGS) -o $(BINDIR)/sign sign.c $(LIBS)

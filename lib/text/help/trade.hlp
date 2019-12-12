@@ -1,0 +1,1049 @@
+TRADE "TRADE SKILL"
+
+Trade (skill)
+
+The Trade skill contains abilities for collecting, crafting, and trading goods
+of all kinds.
+
+You can get started in Trade by crafting things using the Primitive Crafts and
+Cook abilities, by chipping rocks together to make handaxes, or by tanning skins
+into leather.
+
+Many craftable items are scalable, meaning their stats depend on the level of
+the person who crafts them. HELP SCALABLE CRAFTS has a full explanation.
+
+See also: CRAFT, IDENTIFY, FORGE, SEWING, POTTERY, WOODWORKING, SHIPBUILDING,
+  REFORGE
+#
+"ADVANCED SHIPS" "ADVANCED SHIPYARDS" "UPGRADED SHIPYARD" "ADVANCED SHIP LIST"
+
+Advanced Ships (Trade ability)
+
+Building:  &b~&0[]&b~&0  Upgraded Shipyard (Seafaring ability)
+Fame:  4
+Commands:  manufacture <ship>
+           manufacture info <ship>
+
+The upgraded shipyard allows you to manufacture bigger, more powerful ships.
+
+With Advanced Ships you can manufacture:
+  Carrack
+    Type: Exploration ship (house boat)
+    Capacity: 400
+    Health: 96
+    Rooms: 8
+  Brigantine
+    Type: Warship (siege weapons)
+    Health: 128
+    Rooms: 4
+  Hulk
+    Type: Cargo ship (shipping)
+    Capacity: 1000
+    Health: 64
+    Rooms: 4
+
+See also: SHIPBUILDING, BOARD, DISEMBARK, SAIL, SHIPPING, SHIPS, UPGRADE
+#
+"ADVANCED WOODWORKING"
+
+Advanced Woodworking (Trade ability)
+
+With Advanced Woodworking you can craft:
+  beehive*
+  carriage*
+  wagon*
+
+* Crafts marked with an asterisk require the Carpenter building.
+
+See also: CRAFT, LAND VEHICLES
+#
+"ALCHEMIST CRAFTS"
+
+Alchemist Crafts
+Class ability: Alchemist
+
+This ability will contain any crafts for the Alchemist class.
+#
+"ANTIQUARIAN CRAFTS"
+
+Antiquarian Crafts
+Class ability: Antiquarian
+
+This ability will contain any crafts for the Antiquarian class.
+#
+ARMORSMITHING ARMORCRAFTING
+
+Armorsmithing (Trade ability)
+Command:  forge [number] <item>
+Tool:  hammer
+
+A forgemaster with the Armorsmithing specialization can create many armors:
+  copper breastplate (armor)
+  copper mask (head)
+  copper vambraces (arms)
+  copper buckler (shield)
+  
+These armor pieces are all classified as Medium Armor.
+
+Armorsmithing -> Sturdy Armors -> Imperial Armors
+
+See also: FORGE, WEAPONCRAFTING, STURDY ARMORS, IMPERIAL ARMORS
+#
+"ARTIFICER CRAFTS"
+
+Artificer Crafts
+Class ability: Artificer
+
+Craft items:
+  clockwork lens array  (crafter item)
+
+See also: CRAFT
+#
+"BASIC CRAFTS"
+
+Basic Crafts (Trade ability)
+
+Command:  craft [number] <item>
+          craft info <item>
+
+All crafting abilities train when you complete recipes that require them.
+
+Basic Crafts:
+  bricks
+  jar  (glassblower)
+  candle  (apiaries)
+  flask
+  rope
+  shiv
+  canoe
+  raft
+  bound wooden column
+  saddle
+  violet dye  (glassblowing)
+  orange dye  (glassblowing)
+
+See also: CRAFT INFO, CRAFTING LEVEL, WOODWORKING, RESOURCES, KEEP,
+PRIMITIVE CRAFTS
+#
+CARTS WAGONS CARRIAGES CARAVANS "LAND VEHICLES"
+
+Carts and their more advanced cousins, carriages, caravans and wagons, are
+essentially large chests on wheels, allowing you to carry large piles of
+resources quickly from one place to another. They can also be ridden on and
+driven to move around without spending moves.
+
+You can board caravans and carriages, and ride around inside them. Caravans can
+even have a few different rooms redesignated inside.
+
+Storage capacities (large items count twice):
+Cart: 200 items
+Carriage: 200 items, 1 room inside
+Wagon: 400 items
+Caravan: 100 items: 2 rooms inside
+
+See also: DRIVE, ENTER, GET, HARNESS, LEAD, MOUNT, PUT, VEHICLE
+#
+CLOTHING CLOTHES
+
+These are items you can sew and wear, but which have no affect on your stats.
+
+Leather clothing:
+ head: traveling hat, leather hood, fur hat
+ body: leather jacket, spotted robe
+ about body: cape, cloak, shawl
+ hands: leather gloves
+ feet: moccasins, sandals
+ waist: belt
+ legs: leather pants
+
+Cloth clothing:
+ head: hood, barbette, brimmed cap, bonnet, wimple, coif
+ body: blouse, dress, shirt, toga, robe, doublet, waistcoat, tunic
+ about body: mantle
+ hands: gloves
+ waist: girdle
+ legs: breeches, stockings, hose
+
+See also: SEWING
+#
+COOK COOKING BAKE BAKING
+
+Cook (Trade ability)
+
+Command:  cook [number] <item>
+          cook info <item>
+
+Speed boosts:  Faster Chores bonus
+
+The cook command (formerly "bake") allows you to make food from a variety of
+raw ingredients. To cook, you'll need a heat source: a cooking fire, a kitchen,
+a bakery, an alchemist, or a laboratory. The Touch of Flame ability also works.
+Many basic cooked foods also give you small food buffs (see WELL-FED).
+
+You can cook:
+  bean soup                              pumpkin pie (charisma)
+  fried meat pie (strength)              blackberry tart
+  apple pie (charisma)                   nutty squash flatbread (dodge
+  peach pie (charisma)                   roast plate (resist-physical)
+  cherry pie (charisma)                  fish plate (wits)
+  candied apple                          catfish plate (intelligence)
+  casserole (inventory)                  roast meat
+  jerky (bonus-physical)                 banana pie (charisma)
+  tortilla                               banana bread (moves)
+  burrito (resist-physical)              spicy jerky (bonus-magical)
+  bread (move-regen)                     potato slices
+  fried rice (dexterity)                 prunes (age)
+  salt pork                              plum pie (charisma)
+  chicken and vegetables (health)        strawberry pie (charisma)
+  ham and cheese sandwich (move-regen)   strawberry jam (mana-regen)
+  fruit bowl                             candied mango
+  orange chicken and pears               blueberry pie (charisma)
+  sausage link (to-hit)                  blueberry jam (mana)
+  road biscuit (block)                   coffee
+  mushroom plate (resist-magical)        oat cake (bonus-healing)
+
+There are also more recipes to find.
+
+See also: COOKING FIRE, FAMILY RECIPES, GOURMET CHEF, CRAFTING LEVEL, MILL,
+   BAKERY, RESOURCES, KEEP, RECIPES, COOK INFO, RECIPES
+#
+"CRAFT INFO" "FORGE INFO" "SEW INFO" "BUILD INFO" "MANUFACTURE INFO" "COOK INFO"
+
+Usage:  <verb> info <recipe name>
+
+The 'info' subcommand allows you to see specific information on a recipe. This
+includes what resources you need for it, what ability it uses, what it creates,
+and what else you need for the recipe.
+
+This commmand prioritizes recipes you have the ability for, but can target ones
+you don't know. To get crafting information for a pattern recipe, you must have
+its pattern in your inventory.
+
+For build, this also shows where you can build the building.
+For recipes from patterns, this also shows the level range of the recipe.
+
+See also; RESOURCES, SCALABLE CRAFTS, PATTERNS
+#
+"DANGEROUS LEATHERS"
+
+Dangerous Leathers (Trade ability)
+Command:  sew [number] <item>
+
+Dangerous Leathers allows you to create more powerful leather gear.
+
+Weapons:
+  razor whip
+
+Armor:
+  scale armor
+  viper helm
+  shark skin vambraces
+
+Misc:
+  leather boots
+  large backpack
+  snakeskin saddle
+
+Rawhide Stitching -> Leatherworking -> Dangerous Leathers
+
+See also: LEATHERWORKING, MASTER TAILOR, RAWHIDE STITCHING, SEWING
+#
+"DEADLY WEAPONS"
+
+Deadly Weapons (Trade ability)
+Building:  forge
+Command:  forge [number] <item>
+Tool:  hammer
+
+Deadly Weapons allows you to make powerful weapons.
+
+Deadly Weapons:
+  falchion
+  glaive
+  great axe
+  horsemans pick
+  kris
+  maul
+
+Ship Weapons:
+  cannon
+
+Weaponcrafting -> Iron Blades -> Deadly Weapons
+
+See also: FORGE, WEAPONCRAFTING, IRON BLADES
+#
+"EXQUISITE WOODWORKING"
+
+Exquisite Woodworking (Trade ability)
+
+With Exquisite Woodworking you can craft:
+  caravan*                        elegant handle
+
+* Crafts marked with an asterisk require the Carpenter building.
+
+See also: CRAFT, LAND VEHICLES
+#
+"FAMILY RECIPES"
+
+Family Recipes (Trade ability)
+
+Usage:  cook [number] <recipe>
+Requirements:  cooking fire, sharp tool
+
+You can use old family recipes to create buff foods -- foods that give you an
+effect for a while after you eat them. These foods are bind-on-pickup, so only
+the person who makes them can eat them.
+
+You can make the following family recipes:
+  berry cobbler (wits)                     hearty meatloaf (strength)
+  biscuits and gravy (move-regen)          jellied eels (dodge)
+  black sausage (to-hit)                   mom's pie (max-mana)
+  chicken and dumplings (intelligence)     pot roast (max-health)
+  chili (max-moves)                        shepherd's pie (dexterity)
+  fish and chips (charisma)                stewed vegetables (mana-regen)
+
+See also: BUFF FOOD, BOP, COOKING FIRE
+#
+"FINE POTTERY"
+
+Fine Pottery (Trade ability)
+
+With this ability, you can make the following fine pottery items:
+  tethyan focus  (caster dps off-hand)
+  areios charm  (melee dps off-hand)
+  gaian effigy  (healer off-hand)
+  hestian trinket  (whisks you home)
+  peace pipe
+
+See also: POTTERY, MASTER CRAFTSMAN
+#
+FORGE
+
+Forge (Trade ability)
+
+Building:  (FF)  Forge  (Basic Buildings)
+Tool:  hammer
+Commands:  forge [number] <item>
+           forge info <item>
+
+Forging is done in a forge using iron ingots. Almost all metallic armor and
+weapons are created at a forge, with varying levels of skill. Iron, silver,
+and gold are found through mining. You can craft a stone hammer to get started,
+but a superior hammer will allow you to forge more quickly.
+
+There are three forge specializations: Weaponcrafting, Armorsmithing,
+and Jewelry. You can also learn to be a Master Blacksmith.
+
+With the basic Forge skill, you can create:
+  nails (x4)
+  imperium spike (x3)
+  nocturnium spike (x3)
+  hammer
+  woodsman axe -- for chopping
+  short sword -- basic weapon
+  pick -- for mining
+  shovel -- dig faster
+  pan -- pan for gold
+  mirror
+  coin mill
+  anchor -- used on ships
+
+See also: CRAFT INFO, CRAFTING LEVEL, RESOURCES, KEEP, SMELT, WEAPONCRAFTING,
+  ARMORSMITHING, JEWELRY, MASTER BLACKSMITH, IRON BLADES, STURDY ARMORS,
+  DEADLY WEAPONS, IMPERIAL ARMORS, RECIPES
+#
+"GOURMET CHEF"
+
+Gourmet Chef (Trade ability)
+
+Usage:  cook [number] <recipe>
+Requirements:  cooking fire, sharp tool
+
+You can create lavish buff foods -- foods that give you an effect for a while
+after you eat them. These recipes are meant to share, so bring ingredients for
+your whole adventuring party! Each recipe provides food for 4 people but cannot
+be moved once prepared.
+
+You can make the following gourmet recipes:
+  extravagant dessert platter (general)
+  mixed vegetable board (healer)
+  roast meat platter (tank)
+  roast turkey feast (melee)
+  seafood feast (caster)
+
+See also: BUFF FOOD, COOKING FIRE
+#
+"GUILDSMAN CRAFTS"
+
+Guildsman Crafts
+Class ability: Guildsman
+
+Weave items:
+  guild patterned cloth  (crafter item)
+
+See also: WEAVE
+#
+"HERBCLOTH WEAVING" "SPARKFIBER CLOTH" "MANASILK CLOTH"
+
+Herbcloth Weaving (Trade ability)
+Command:  weave <sparkfiber | manasilk> cloth
+
+Skilled tradesmen can weave enchanted herbs into their textiles in order to
+imbue magical properties. Sparkfiber is usually used to make caster dps gear,
+and manasilk is generally used for healer items.
+
+These cloths are generally used in crafts in the 200-300 level range.
+
+See also: HERBS, WEAVE
+#
+HONE HONED
+
+Hone (Trade ability)
+
+Usage:  hone <item> <type>
+Cost:  2 nocturnium ingots
+
+Characters with the Trade skill can learn to hone their own items, making them
+more powerful. Honing an item will bind it to the character, so it can only be
+used on the user's own gear. You must still have the Hone ability to use any
+gear you have honed.
+
+Just like Enchant, the power gained from Hone is based on either your crafting
+level or your composite level (whichever is higher). It's also limited by the
+level of the item you hone (more powerful items get bigger bonuses). Players
+with Trade skill below 100 will also be limited by their Trade skill.
+
+You can hone the following item slots:
+ Weapon: harden weapon (Bonus-Physical), brighten weapon (Bonus-Magical)
+ Off-Hand: polish relic (Bonus-Healing)
+ Shield: reinforce shield (Resist-Physical/Magical)
+
+See also: RECIPES
+#
+IRON "IRON ORE"
+
+Used for:  forge, build, manufacture
+Stored in:  Foundry
+
+Iron ore is found by mining in the mountains. It is useful in building and
+forging equipment, as well as manufacturing ships.
+
+You can learn about getting iron via HELP IRON GUIDE.
+
+See also: BUILD, FORGE, METALS, MINE, MANUFACTURE, SMELT
+#
+"IMPERIAL ARMORS" "IMPERIAL ARMORSMITHING"
+
+Imperial Armors (Trade ability)
+Command:  forge [number] <item>
+Tool:  hammer
+
+A forgemaster with the Imperial Armors specialization can create new armors.
+
+Medium armor:
+  cuirass (armor)
+  eagle helm (head)
+  spiked vambraces (arms)
+
+Heavy armor:
+  plate armor
+  great helm (head)
+  lower cannons (arms)
+
+Shield:
+  ram shield
+  
+Armorsmithing -> Sturdy Armors -> Imperial Armors
+
+See also: FORGE, WEAPONCRAFTING, ARMORSMITHING, STURDY ARMORS
+#
+IMPERIUM "IMPERIUM ORE"
+
+Used for:  forge
+Stored in:  Foundry
+
+Imperium is a rare, strong metal with a bright white color. It is used to make
+powerful weapons and armor.
+
+See also: FORGE, METALS, MINE, SMELT
+#
+"IRON BLADES"
+
+Iron Blades (Trade ability)
+Building:  forge
+Command:  forge [number] <item>
+Tool:  hammer
+
+Iron blades allows you to forge the iron tier of equipment.
+
+Iron Blades:
+  arming sword
+  battle axe
+  dagger
+  mace
+  pickaxe
+  pike
+
+Tools:
+  iron hammer
+  iron shovel
+
+Weaponcrafting -> Iron Blades -> Deadly Weapons
+
+See also: FORGE, IRON BLADES, DEADLY WEAPONS
+#
+JEWELRY
+
+Jewelry (Trade ability)
+Command:  forge [number] <item>
+Tool:  hammer
+
+The Jewelry ability is a forge specialization that can make:
+  silver ring
+  silver mirror
+  silver earrings
+  gold mirror
+  silver bracelets
+  gold ring
+  gold earrings
+  gold bracelets
+  engagement ring
+  wedding band
+  crown
+
+All silver costs are in nuggets and gold costs are in dust. You can smelt bars
+back down into these forms if you have already smelted them into bars.
+
+See also: FORGE, WEAPONCRAFTING, ARMORSMITHING
+#
+LEATHERWORKING
+
+Leatherworking (Trade ability)
+Command:  sew [number] <item>
+
+Leatherworking is a sewing specialization. It allows you to create lightweight
+leather armors. To get leather, you must tan skins.
+
+Weapons:
+  studded whip
+
+Light Armor:
+  leather breastplate
+  leather helm
+  leather vambraces
+  leather buckler
+  
+Misc:
+  shoes
+  wineskin
+  leather backpack
+  fine saddle
+
+Rawhide Stitching -> Leatherworking -> Dangerous Leathers
+
+See also: SEWING, DANGEROUS LEATHERS, MASTER TAILOR, RAWHIDE STITCHING, SKIN,
+  TAN
+#
+"LETHEIAN ICON"
+
+usage: use <icon> <skill name>
+
+Letheian icons are consumable trinkets which grant an extra skill reset for a
+skill of your choice, allowing you to choose new abilities for that skill. They
+are crafted using the Master Craftsman ability.
+
+See also: MASTER CRAFTSMAN, SKILL RESET
+#
+"MAGIC ATTIRE" "MAGICAL ATTIRE" "MAGE ATTIRE"
+
+Magic Attire (Trade ability)
+Command:  sew [number] <item>
+
+Magic attire is basic cloth armor, designed for mages, and woven from magic as
+well as from cloth. These items benefit from the Master Tailor ability.
+
+You can make:
+  mage robe
+  conical hat
+  furrowed sleeves
+  apprentice shoes
+
+Sew -> Magic Attire -> Magical Vestments
+
+See also: MAGICAL VESTMENTS, MASTER TAILOR, WEAVE, SEW
+#
+"MAGICAL VESTMENTS" "MAGIC VESTMENTS" VESTMENTS
+
+Magical Vestments (Trade ability)
+Command:  sew [number] <item>
+
+By learning to weave with mana, a skilled tradesman can create powerful magical
+clothing and armor. These items benefit from the Master Tailor ability.
+
+You can make:
+  sorcerers robe
+  wizards hat
+  armbands of power
+  earth-hewn sandals
+  magewhisper pouch
+
+Sew -> Magic Attire -> Magical Vestments
+
+See also: MAGIC ATTIRE, MASTER TAILOR, WEAVE, SEW
+#
+"MASTER BLACKSMITH"
+
+Master Blacksmith (Trade ability)
+
+With this ability, some items you forge will have even greater power. You can
+also forge them more quickly. To train this ability, you need to craft items
+like weapons and armor (items that come out superior); it won't work with nails
+or other small items.
+
+See also: FORGE, WEAPONCRAFTING, ARMORSMITHING, SUPERIOR
+#
+"MASTER FARMER" "MASTER FARMING"
+
+Master Farmer (Trade ability)
+
+Get better results from harvest, mill, and shear.
+
+Gains experience from any of these tasks.
+
+See also: HARVEST, MILL, SHEAR
+#
+"MASTER CRAFTSMAN"
+
+Master Craftsman (Trade ability)
+
+This mastery ability improves the quality of certain items from the Pottery
+and woodworking tree.
+
+It also allows you to craft the following:
+
+  letheian icon (skill reset)
+
+See also: POTTERY, FINE POTTERY, SUPERIOR, LETHEIAN ICON
+#
+"MASTER TAILOR"
+
+Master Tailor (Trade ability)
+
+Items you sew will be superior in quality and ability. (This stacks with
+enchantments). You can only level up with this ability by sewing items that
+can come out superior.
+
+See also: RAWHIDE STITCHING, LEATHERWORKING, DANGEROUS LEATHERS,
+  MAGIC ATTIRE, MAGICAL VESTMENTS, SUPERIOR
+#
+"MOONSTONE SMELTING" "MOONSTONE ORE" MOONSTONE "ARGENTINE INGOT" "EVENTIDE INGOT"
+
+Moonstone Smelting (Trade ability)
+Command:  smelt <argentine | eventide> ingot
+
+The super-rare moonstone ore is highly prized by metallurgists, and can be
+smelted with imperium and nocturnium ingots to produce valuable argentine and
+eventide metals, respectively.
+
+These metals are generally used in crafts in the 200-300 level range.
+
+See also: RARE METALS, SMELT
+#
+NOCTURNIUM "NOCTURNIUM ORE"
+
+Used for:  forge, sew
+Stored in:  Foundry
+
+Nocturnium is a pure black metal, its surface swirling with mana. It is often
+plated onto powerful magical objects.
+
+See also: FORGE, METALS, MINE, SEW, SMELT
+#
+PATTERNS "ADVENTURE CRAFTS" "CRAFTING PATTERNS"
+
+Some items can be found in adventures which allow you to use crafting recipes as
+long as you own them. These are usually called 'patterns'. Crafts from patterns
+are not limited by the levels of your skills or the ability used to make them.
+
+The level of the crafted item is based on your crafting level, but many patterns
+have their own upper limit. Usually the pattern will mention if there's a limit.
+  
+You can see the level range of the item a pattern makes on its info display.
+
+See also: CRAFTING LEVEL, CRAFT INFO, SCALABLE CRAFTS
+#
+POTTER POTTERY
+
+Pottery (Trade ability)
+
+Building:  (PP) potter
+Command:  craft [number] <item>
+
+A good potter can mold clay into many different useful items. You will need
+a fire, but the pottery goes much faster if you are in a Potter building.
+
+With Pottery you can craft:
+  bowl
+  pot
+  vessel
+  clay shield  (shields)
+  trinket of conveyance
+
+See also: CLAY, DIG, FINE POTTERY, MASTER CRAFTSMAN
+#
+"PRIMITIVE CRAFTS" CRAFT CRAFTS
+
+Primitive Crafts (Trade ability)
+
+Command:  craft [number] <item>
+          craft info <item>
+
+All crafting abilities train when you complete recipes that require them.
+
+Primitive crafts:
+  handle
+  stone axe
+  flint set
+  stone hammer
+  spear
+
+With Archery, you can craft:
+  arrows
+
+See also: CRAFT INFO, CRAFTING LEVEL, WOODWORKING, RESOURCES, KEEP, RECIPES,
+BASIC CRAFTS
+#
+"PRISMATIC CRYSTALS" "PRISMATIC CRYSTAL"
+
+Prismatic Crystals (Trade ability)
+Command:  craft prismatic crystal
+Cost:  100 mana
+
+This high-level Trade ability allows you to combine a bunch of magic gems into
+one multi-colored gem. The prismatic crystal is used in high-level crafts and
+enchantments.
+
+These gems are generally used in crafts in the 200-300 level range.
+
+See also: CRAFT
+#
+"RAWHIDE STITCHING"
+
+Rawhide Stitching (Trade ability)
+Command:  sew [number] <item>
+
+The basic leather tier is made of rawhide -- untanned leather that is hardened
+to the right shape and stitched together, but isn't waterproof.
+
+Weapons:
+  rawhide whip
+
+Armor:
+  rawhide breastplate
+  rawhide skullcap
+  rawhide bracers
+
+Misc:
+  rawhide boots
+  rawhide knapsack
+  rawhide saddle
+
+Rawhide Stitching -> Leatherworking -> Dangerous Leathers
+
+See also: DANGEROUS LEATHERS, LEATHERWORKING, MASTER TAILOR, SEWING
+#
+RECIPE RECIPES
+
+Usage:  recipes <item>
+
+This command allows you to see which recipes (forge, craft, cook, etc) you
+know that require a given item. It also shows which augments (enchant, hone)
+you know that require the item.
+#
+REFORGE REFASHION
+
+Refashion (Trade ability)
+Reforge (Trade ability)
+
+Usage:  reforge <item | person> name <new name>
+        reforge <item | person> <renew | superior>
+
+A great blacksmith (weapons) or tailor (armors and shields) can use this
+ability in three ways:
+
+Name: You can take a generic item and give it a name. The name must contain
+the original name (except a leading a/an/the). Requires 1 blue iris per 3 gear
+rating on the item.
+
+Renew: This undoes any enchantments, disenchantments, name, superior quality, 
+and all other effects, and restores the item to its base stats. Requires 1
+bloodstone per 3 gear rating on the base (unmodified) item.
+
+Superior: If the item is a crafted item that could have superior qualities,
+this adds those qualities and marks it (superior). You can only use this on
+the normal version of an item that can be made superior, and only if you have
+the correct Master ability. Requires 1 green seashell per 3 gear rating on the
+item.
+
+An item must be in your inventory to reforge it. However, if another player
+"shares" an item, you can reforge that item by targeting that player by name
+(e.g. "reforge Lyra superior").
+
+See also: MASTER BLACKSMITH, MASTER TAILOR, SHARE
+#
+"SCALABLE CRAFTS" "SCALABLE CRAFTING" "CRAFTING SCALABLES" "ITEM SCALING" OBJECT SCALING"
+
+Many craftable items (including things made with brew, craft, forge, and sew)
+are scalable, which means they change in power and attributes based on the
+level and skills of the person who crafted them.
+
+For most recipes, the level of the resulting item will be the lowest of:
+  The level range of the ability that gives the recipe (50/75/100).
+  Your level in the ability's skill (usually Trade).
+  Your Crafting level.
+  Your skill level (if under 100).
+
+For example, the arming sword from Iron Blades cannot be higher than level 75,
+since this ability is from the 50-75 level range.
+
+Recipes which come from crafting patterns follow slightly different rules - see
+HELP CRAFTING PATTERNS for more information.
+
+See also: PATTERNS, CRAFTING LEVEL, IDENTIFY, SKILL LEVEL, SUPERIOR
+#
+SEW SEWING
+
+Sew (Trade ability)
+Command:  sew [number] <item>
+          sew info <item>
+
+The art of sewing is one of the oldest and simplest trade skills, but it also
+makes some of the finest clothing and the lightest armor. The only resource
+required for sewing is skin.
+
+For a list of clothing items you can sew, see HELP CLOTHING.
+
+With basic Sewing, you can make:
+  whip -- primitive weapon
+  canteen -- holds drinks
+  satchel -- increases carrying capacity
+  tent -- a portable shelter
+  sail -- for shipbuilding
+
+Additional sewing items are available from other abilities in the Trade skill,
+as well as patterns and crafts hidden around the world.
+
+See also: CRAFT INFO, CRAFTING LEVEL, RESOURCES, KEEP, LEATHERWORKING,
+   RAWHIDE STITCHING, RECIPES
+#
+SHIP SHIPS 
+
+(Disambiguation: Did you mean HELP SHIP COMMAND ?)
+
+The most efficient form of ocean travel, ships can be sailed at a fixed speed
+(with 'sail <direction>'), consuming no moves.
+
+Ships can be used to manually transport resources, but items inside a ship's
+storage hold (via 'put <item> [in] <ship>') will auto-store to the empire's
+main island if the ship is left alone at sea.
+
+Ships can also be used to transport resources automatically using the ship
+command.
+
+See also: BOARD, DISEMBARK, SAIL, SHIPBUILDING, SHIPPING, DISPATCH
+#
+SHIPBUILDING "SHIP BUILDING" MANUFACTURE SHIPYARDS "SHIP LIST"
+
+Shipbuilding (Trade ability)
+
+Building:  &b~&0()&b~&0  Shipyard (Seafaring ability)
+Commands:  manufacture <ship>
+           manufacture info <ship>
+
+Great ships can be created via the manufacture skill. This can only be done in
+a shipyard, and the vessel can be sailed to a dock when finished.
+
+You gain experience for the appropriate ability every time you add resources to
+a ship being manufactured.
+
+With basic Shipbuilding you can manufacture:
+  Caravel
+    Type: Exploration ship (shipping)
+    Capacity: 150
+    Health: 32
+    Rooms: 2
+  Longship
+    Type: Warship (siege weapons)
+    Health: 64
+    Rooms: 2
+  Cog
+    Type: Cargo ship (shipping)
+    Capacity: 450
+    Health: 32
+    Rooms: 1
+
+See also: CRAFT INFO, ADVANCED SHIPS, BOARD, DISEMBARK, SAIL, SHIPPING, SHIPS,
+   UPGRADE, RESOURCES, KEEP, SCRAP, VEHICLE, RECIPES
+#
+SIEGEWORKS "SIEGE WORKS"
+
+Siegeworks (Trade ability)
+
+Craft:
+  catapult (requires Carpenter building)
+
+Forge:
+  heavy shot
+
+See also: CRAFT, FORGE
+#
+"SKIN COMMAND" SKINNING
+
+Usage:  skin <corpse>
+
+You can skin a fresh corpse to get usable material, which can later be turned
+into good equipment. Some corpses cannot be skinned, especially severely
+damaged and putrid ones.
+
+Possible results from skinning and example animals:
+  small skin: rabbit, squirrel
+  large skin: deer, buffalo
+  shark skin: shark
+  snakeskin: any snake
+  fox fur: fox
+  big cat pelt: tiger, jaguar, leopard
+
+See also: SKINS, SEWING, LEATHERWORKING, RAWHIDE STITCHING, TAN
+#
+"SMUGGLER CRAFTS"
+
+Smuggler Crafts
+Class ability: Smuggler
+
+This ability will contain any crafts for the Smuggler class.
+#
+"STEELSMITH CRAFTS"
+
+Steelsmith Crafts
+Class ability: Steelsmith
+
+Forge items:
+  delicate tools  (crafter item)
+
+See also: FORGE
+#
+"STURDY ARMORS"
+
+Sturdy Armors (Trade ability)
+Command:  forge [number] <item>
+Tool:  hammer
+
+This is the iron armor tier.
+
+Sturdy Armors:
+  hauberk (armor)
+  mail coif (head)
+  splint vambraces (arms)
+  kite shield
+  
+These armor pieces are all classified as Medium Armor.
+
+Armorsmithing -> Sturdy Armors -> Imperial Armors
+
+See also: FORGE, WEAPONCRAFTING, ARMORSMITHING, IMPERIAL ARMORS
+#
+TAN TANNING
+
+Usage:  tan <skin>
+Speed boosts:  Faster Chores bonus
+Stored in:  Tannery
+
+You can tan skins into leather. This process will go faster at a tannery. Both
+skins and leathers are used in sewing and crafting.
+
+See also: SKIN, LEATHER
+#
+"TINKER CRAFTS"
+
+Tinker Crafts
+Class ability: Tinker
+
+Forge items:
+  clips and buckles  (crafter item)
+
+See also: FORGE
+#
+"VERDANT LEATHERS" "BRIAR HIDE" "ABSINTHIAN LEATHER"
+
+Verdant Leathers (Trade ability)
+Command:  craft <briar hide | absinthian leather>
+
+Certain tradesmen learn to treat fine leather with a bath of herbs, creating
+magical leathers that are used to make the finest leather weapons and armor.
+
+These leathers are generally used in crafts in the 200-300 level range.
+
+See also: CRAFT, HERBS
+#
+WEAPONCRAFTING WEAPONSMITHING
+
+Weaponcrafting (Trade ability)
+Building:  forge
+Command:  forge [number] <item>
+Tool:  hammer
+
+Weaponcrafting is a forge specialization, and allows you to create additional
+items.
+
+Weaponcrafting:
+  copper knife
+  copper spear
+  copper axe
+  copper mace
+
+Weaponcrafting -> Iron Blades -> Deadly Weapons
+
+See also: ARMORSMITHING, FORGE, IRON BLADES, DEADLY WEAPONS
+#
+WEAVE
+
+Command:  weave [number] <item>
+          weave info <item>
+
+Weaving converts raw materials into cloth. You can weave anywhere, but it goes
+much faster at the tailor shop.
+
+Using the Sew ability:
+  cloth  2 cotton
+  wool cloth  2 wool
+  
+(Wool cloth and cotton cloth are used for the same things.)
+
+See also: SHEAR, RESOURCES, KEEP, RECIPES, CRAFT INFO
+#
+WOODWORKING "WOOD WORKING"
+
+Woodworking (Trade ability)
+
+With Woodworking you can craft:
+  flute
+  shortbow
+  lyre
+  longbow*
+  stake
+  cart*
+  walking stick
+  lantern*  (glassblowing)
+  wooden sword
+  blank sign*
+  stool*
+  bench*
+  chair*
+  table*
+  throne*
+
+* Crafts marked with an asterisk require the Carpenter building.
+
+See also: CRAFT, LAND VEHICLES
+#
+$

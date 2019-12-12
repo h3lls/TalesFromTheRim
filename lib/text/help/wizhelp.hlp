@@ -1,0 +1,1312 @@
+ADVANCE
+
+Usage:  advance <victim> <access level>
+
+ADVANCE moves a player to a new access level. If used to promote a player to an
+immortal or god level, the wizlist and godlist will automatically be recreated.
+This command is grantable.
+
+Don't confuse access levels with skill/gear levels.
+
+Example:
+  > advance rasmussen 4
+
+See also: GRANT, SET
+#d
+APPROVE UNAPPROVE AUTHORIZED AUTHORIZATION APPROVAL
+
+Usage:  approve <name>
+        unapprove <name>
+
+If the mud is configured to require approval for players/characters, the
+'approve' command gives that approval, and the 'unapprove' command revokes it.
+This command is grantable.
+
+The command "config approval -v" will show the current configuration.
+
+See also: CONFIG, GRANT
+#d
+AT WIZAT
+
+Usage:  at <room | coords | item | mob | player name> <command> <arguments>
+
+AT can be used to perform an action in a location other than where you are
+standing. The first argument can be a virtual room number or the name of a
+character or object. The remainder of the line is passed to the command
+interpreter.
+
+Examples:
+
+  > at 3001 look
+  > at dog kill dog
+  > at 3.corpse get all corpse
+  > at catje wave catje
+  > at (0,0) bark  -- There must be no spaces in the coordinates
+
+See also: GOTO
+#d
+AUTOWIZ
+
+Usage:  autowiz
+
+Regenerates the wizlist and godlist.
+#d
+BAN UNBAN
+
+Usage:  ban [<all | new | select> <site>]
+        unban <site>
+
+These commands prevent anyone from a site with a hostname containing the site
+substring from logging in to the game. You may ban a site to ALL, NEW or
+SELECT players. Banning a site to NEW players prevents any new players from
+registering. Banning a site to ALL players disallows ANY connections from
+that site. Banning a site SELECTively allows only players with site-ok flags
+to log in from that site. Ban with no argument returns a list of currently
+banned sites.
+
+Unban removes the ban. This command is grantable.
+
+Examples:
+
+  > ban all whitehouse.gov
+  > unban ai.mit.edu
+
+See also: GRANT, WIZLOCK
+#d
+BREAKREPLY "BREAK REPLY"
+
+Usage:  breakreply
+
+This command cancels the "reply-to" data for all players in the game who are
+lower level than you. It's useful it you want to be invisible and don't want
+players to be able to see that you're online using "reply".
+
+See also: REPLY
+#d
+CLEARABILITIES
+
+Usage:  clearabilities <player> <skill | all>
+
+This command resets the abilities for the target player. They keep their skill
+percentages, but may re-purchase all their abilities. You can either target a
+specific skill, or "all". This command is grantable.
+
+See also: GRANT, SET
+#d
+CONFIG
+
+Usage:  config <type> [-v]
+        config <type> <key> [value]
+
+This privileged command controls many global game configurations. You can get
+view explanations for the configs using the -v option with any set of configs.
+Be careful changing global configs, as some of them make powerful changes to
+features.
+
+There is no undo button, but all changes are logged.
+
+If you want to experiment with the system, you can change test_config in the
+"other" set.
+#b
+CREATE
+
+Usage:  create [number] <item>
+
+This command allows a god or immortal to create one or more simple items
+instantly. Normally, only resources and simple tools can be created this way.
+In order to create items, you must have the correct resources available. You
+get resources when people sacrifice items to you. Resource counts can be seen
+on your score sheet.
+
+See also: SACRIFICE, SCORE
+#e
+DATE
+
+Shows the current real time. (Not a social)
+#d
+DC
+
+Usage:  dc <descriptor number>
+
+DC (DisConnect) is used to disconnect a socket. If used on a playing socket,
+the player will lose his/her link, but, unlike PURGE, will not extract the
+player or dump the player's inventory on the ground. This command is grantable.
+
+DC is also useful for disconnecting people who are stuck in character creation.
+
+See also: GRANT, USERS
+#d
+DISTANCE
+
+Usage:  distance <location>
+
+This computes the map distance between your current location and any target.
+You can target players, coordinates, or anything else you could target with
+commands like 'goto'.
+
+The mortal version of this is 'mark'.
+
+See also: MARK
+#d
+ECHO GECHO SEND
+
+Usage:  echo <message>
+        gecho <message>
+        send <victim> <message>
+
+ECHO displays a string to everyone in your room.
+GECHO displays the string to everyone in the game.
+SEND displays the string to a particular person.
+
+Regular ECHO supports @target and #item just like emote. All three of these
+commands are grantable.
+
+Examples:
+
+  > echo Hi, everyone in the room.
+  > gecho Hi, everyone in the game, isn't this annoying?
+  > send rasmussen You are being watched.
+
+See also: EMOTE, GRANT
+#d
+EDELETE
+
+Usage:  edelete <empire>
+
+Immortal tool to delete an empire.
+#d
+EDITNOTES ADDNOTES NOTES "PLAYER NOTES" "ADMIN NOTES" "EDIT NOTES" "ADD NOTES" "SHOW NOTES" AUTONOTES "AUTO NOTES" "TOGGLE AUTONOTES"
+
+Usage:  editnotes <player>
+        addnotes <player> <text>
+        show notes <player>
+        toggle autonotes
+
+You can edit and leave notes about a player, to help inform other immortals
+of disciplinary issues or unusual authorizations. Any immortal can see the
+notes on any player below his own level, and can only set notes on players
+below his own level. Editnotes command is grantable, and includes addnotes.
+
+Editnotes opens a text editor; addnotes just adds a line to the existing notes.
+Notes have a 240-character limit; raising this requires converting the player
+file.
+
+The autonotes toggle will cause an immortal player to see the "notes" on player
+accounts as they log into the game. It shows up immediately after the syslog
+for entering the game, only if there are any notes to show.
+
+See also: GRANT
+#d
+FILE
+
+Usage:  file <file> <lines>
+
+Displays the last X lines of a file in the shell. This is useful for seeing 
+recent bad password attempts, ideas, and other information. These are only
+parsed out of the syslog when the mud reboots.
+#d
+FORCE
+
+Usage:  force <victim | all | room> <command> <arguments>
+
+FORCE forces a character, either monster or player, to perform a certain
+action. FORCE ALL forces everyone in the game; FORCE ROOM forces everyone in
+your room. This command is grantable.
+
+Only the Implementor level can force all/room.
+
+Example:
+  > force dog drop meat
+  > force all save
+  > force room look dog
+
+If you are invisible to the one being forced, the force will be performed
+silently.
+
+See also: GRANT
+#d
+FORGIVE
+
+Usage:  forgive <player>
+
+This command forgives the following conditions:
+ - hostile flag
+ - rogue flag
+ - empire defect timer
+ - pvp flag cooldown
+
+This command is grantable.
+
+See also: GRANT, sHOSTILE
+#d
+FREEZE THAW
+
+Usage:  freeze <victim>
+        thaw <victim>
+
+FREEZE, originally invented on CircleMUD (we think), is used to prevent a
+player from playing. If frozen, the game will ignore all commands entered by
+the player, including QUIT, until the player is unfrozen with THAW. Freeze is
+grantable, and includes thaw.
+
+Obviously, this command should only be used in extreme disciplinary
+circumstances.
+
+See also: GRANT, SET -> FROZEN
+#d
+FULLSAVE
+
+Usage:  fullsave
+
+This allows you to force all of the zones in the world to save. They will
+only do so if they've been flagged for saves (thus minimizing lag).
+#d
+GHISTORY "GODHISTORY" "WIZNET HISTORY" WIZHISTORY
+
+Usage:  ghistory
+
+This is the history command for the immortal and god channels.
+
+See also: WIZNET, GODNET
+#d
+GODNET
+
+The gods' communication channel.
+
+Usage:  godnet [#level] <test>
+
+See also: GHISTORY
+#e
+GOTO TRANSFER
+
+Usage:  goto <location>
+        transfer <victim|vehicle> [location]
+
+These commands are used to transports yourself and others to different rooms.
+GOTO allows you to go to other rooms; TRANS transports a person (or vehicle)
+from wherever they are to the room you're in, or another location. The transfer
+command is grantable.
+
+For both GOTO and TRANS, the location specifier can be either a virtual room
+number, coordinates, or the name of a character, object, or vehicle.
+
+Examples:
+
+  > goto 3001
+  > goto rasmussen
+  > trans dog
+  > trans dog 3001
+  > trans dog 2.dog
+
+See also: GRANT, POOFIN, POOFOUT, WIZAT
+#d
+GRANTS
+
+Grants allow a player to use commands that are above his or her privilege
+level. Grants can be added or removed using the "set" command. Mortals can also
+be granted access to some immortal commands, but this isn't always a good idea.
+
+Most of the grant names correspond to actual commands, but some are special:
+ empires - Allows eedit, edelete, moveeinv, and more.
+ olc - Allows .olc, vnum, and vstat.
+ olc-controls - Allows .setflags, .setminvnum, and .setmaxvnum.
+ transfer - Allows moving mortals with commands like transfer and portal.
+
+Try 'helpsearch grantable' to find grantable commands.
+
+See also: OLC-CONTROLS
+#d
+HANDBOOK
+
+Usage:  handbook
+
+Guidelines for having an Immortal character -- you should read it.
+#d
+HASSLE NOHASSLE "NO HASSLE"
+
+Usage:  toggle hassle
+
+Prevents you from activating command triggers and stops mobs from fighting you.
+This toggle is also used by some other triggers to check if you're an immortal
+who doesn't want to be interfered with.
+
+See also: TOGGLE
+#d
+HOLYLIGHT "TOGGLE HOLYLIGHT"
+
+Usage:  toggle holylight
+
+A toggle which allows you to see:
+   Invisible people and objects, even if you don't have 'detect invisibility'
+   Hidden people, even if you don't have 'sense life'
+   Dark rooms, even if you don't have a light
+
+It is expected most immortals will keep HOLYLIGHT on most of the time; it
+exists so that you have the ability to see what mortals see for debugging
+purposes.
+
+See also: TOGGLE, WIZHIDE
+#d
+HOSTILE "HOSTILE COMMAND"
+
+Usage:  hostile <victim>
+
+This immortal command causes a player to be marked as hostile. It should only
+be used when someone is doing something that should really allow guards and
+other players to attack them, but doesn't. This command is grantable.
+
+You can tell if someone is hostile by doing a 'stat' on them and looking for
+the hostile cooldown.
+
+See also: FORGIVE, GRANT, STAT, THIEF
+#d
+IDLE-OUT IDLEOUT "IDLE OUT"
+
+Usage:  toggle idle-out
+
+This immortal toggle prevents you from being disconnected due to long periods
+of inactivity. You can still idle out if you lose your link.
+
+See also: TOGGLE
+#d
+IMOTD
+
+Usage:  imotd
+
+Displays the Immortal message of the day. This file usually contains new
+information on commands recently added, new features and other important
+information that immortals should be aware of.
+
+See also: MOTD
+#d
+INCOGNITO
+
+Usage: toggle incognito
+
+This command prevents you from appearing to mortals on the "who" list. You will
+still be visible in your room, and people can still send you tells.
+
+See also: INVIS, TOGGLE, WIZHIDE
+#d
+INSTANCE INSTANCES
+
+Usage:  instance <list | add | delete | deleteall | nearby | reset | test> [argument]
+
+This command allows immortals to list and manage adventure zone instances.
+The 'list' command can be used to see all instances, or all instances for one
+adventure zone (vnum). To see only instances near you, use the 'nearby' feature
+and, optionally, provide a distance. The instance command is grantable.
+
+The 'delete' command deletes by number in the list.
+
+The 'deleteall' command removes all instances for a given adventure zone
+(by vnum).
+
+The 'reset' command will force a zone reset on the instance you're in or the
+instance number you target.
+
+The 'test' command will link an instance to the room you're in, using a generic
+portal, even if that instance cannot be linked.
+
+See also: GRANT
+#d
+INVIS INVISIBLE
+
+Usage:  invis [level]
+
+INVIS sets your invisibility level. With no argument, invis toggles between
+making you fully visible and fully invisible. If you specify a level, only
+people at and above the level you specify will be able to see you.
+
+Examples:
+
+  > invis
+  > invis 3
+
+See also: INCOGNITO, INVSTART, VISIBLE, WIZHIDE
+#d
+INVSTART INVISSTART "INVIS START" "INV START" "START INVISIBLE"
+
+Usage:  set <name> invstart <on | off>
+
+This setting causes a player to be invisible on login, instead of keeping his
+or her invisibility setting from the last logout.
+
+If you want to log in invisibly in one login only, type "i" at the MOTD when
+prompted to press any key to enter the game.
+
+See also: INVIS, VISIBLE, SET
+#d
+ISLAND "ISLAND COMMAND"
+
+Usage:  island list [keywords]
+        island rename <id> <name>
+        island flags <id> [add | remove] <flags>
+
+This immortal command allows the game's staff to name islands and apply
+properties to them. This command is grantable.
+
+Island flags:
+ NEWBIE - Wipes claims periodically
+ !AGGRO - Prevents aggro mobs, and guard towers won't fire
+
+See also: GRANT
+#d
+LAST
+
+Usage:  last <player_name>
+
+For checking the last time a person logged on, their sitename, and their ID
+number.
+
+Example: 
+
+  > last ras
+  [  24] [1] Ras          : somesite.edu : Tue May 16 22:07:09 1995
+
+See also: STAT
+#d
+LOAD
+
+Usage:  load <type> <virtual number>
+
+LOAD is used to create instances of mobs, objects, and vehicles. The first
+argument specifies what type you are trying to load; the second is the virtual
+number. This command is grantable.
+
+(For the mortal command, try LOAD VEHICLE.)
+
+You can load: mob, obj, vehicle
+
+Example:
+
+  > load obj 1
+  You create a bulletin board.
+
+  > load mob 1
+  You create a snarling wolf.
+
+See also: GRANT, VNUM
+#d
+MOVEEINV "MOVE EINV" "MOVE EMPIRE INVENTORY"
+
+Usage:  moveeinv "<empire>" <from island> <to island>
+
+This command allows an immortal to move an empire's inventory from one island
+to another. All stored items one on island are transferred to the other.
+
+You can use 'show islands <empire>' to see which island ids have items stored.
+
+This command is meant to be used to fix problems for mortals, not to assist
+them in moving around the world. It should only be treated as a repair tool.
+
+See also: EINV, SHOW
+#d
+MUTE
+
+Usage:  mute <victim>
+
+MUTE is used to shut a player up. When muted, a player will not be able to
+use most communication channels until he/she is unmuted. This command is
+grantable.
+
+See also: FLAGS, GRANT
+#d
+NOCUSTOMIZE !CUSTOMIZE "NO CUSTOMIZE"
+
+Usage:  set <name> nocustomize <on | off>
+
+This setting prevents a player from using the 'customize' command, if they have
+been abusing it. This is an account-wide setting.
+
+See also: SET
+#d
+NOTITLE
+
+Usage:  notitle <vicitim>
+
+Prevent players from being able to set their own titles; i.e., if the player
+consistently has an offensive title. The definition of offensive is left as
+an exercise for the reader.
+
+Notitle also prevents the player from changing their empire name, empire
+adjective, and the names of empire ranks.
+
+See also: TITLE
+#d
+NOWIZNET "NO WIZNET"
+
+Usage:  toggle wiznet
+
+Allows you to hear or ignore messages coming over the wiznet.
+
+See also: WIZNET, TOGGLE
+#d
+OSET "RESTRING OBJECT"
+
+Usage:  oset <object> <field> <value>
+
+This command lets you modify an item in the world. It does not change the
+item's prototype; to do that you must use OLC. This command is grantable.
+
+You can change the following fields:
+  flags - Item flags like FAST and HARD-DROP.
+  keywords - The words that can be used to target the object.
+  longdescription - The text shown on the ground.
+  shortdescription - The text used to build strings, and in the inventory.
+  timer - The decay timer on the item (-1 for no decay).
+
+Setting the keywords, longdescription, or shortdescription to "none" will
+restore its strings from the prototype (if one exists).
+
+See also: GRANT, OEDIT
+#d
+PAGE
+
+Usage:  page <player | all> <message>
+
+PAGE is used to send a message, along with a beep, to another player. Use
+PAGE ALL to send a message and a beep to everyone in the game. This command is
+grantable.
+
+Examples:
+
+  > page rasmussen Hey, are you still at the keyboard?
+  > page all GAME WILL BE SHUTTING DOWN IN 10 MINUTES
+
+Do not abuse this command.
+
+See also: GRANT
+#d
+PLAYERDELETE "PLAYER DELETE" "DELETE PLAYER"
+
+Usage:  playerdelete <name> CONFIRM
+
+This command deletes a player completely. It cannot be used on players with
+the !DEL flag set. There is no way to undo this command (unless your EmpireMUD
+keeps backups of mud files). You must type the word 'CONFIRM' as the second
+argument, in all capital letters. This command also cannot be abbreviated.
+
+This command is grantable.
+
+See also: GRANT, SELFDELETE
+#d
+POOFIN POOFOUT
+
+Usage:  poofin <message | none>
+        poofout <message | none>
+
+Sets the message seen by players when you use GOTO to move to a different
+room. POOFIN with no argument displays your poofin (the default is "appears
+with an ear-splitting bang"); POOFOUT defaults to "disappears in a puff of
+smoke."
+
+If you want your name in the middle of the poofin/out message, instead of at
+the beginning, you can use the $n token to place it anywhere. If you don't
+use the $n token, your name will appear at the beginning.
+
+You can remove your poofin or poofout with the "none" command.
+
+Example:
+ > poofin There is a blinding flash of light, and $n appears!
+ > goto Foo
+ There is a blinding flash of light, and Bob appears!
+
+See also: GOTO
+#e
+PURGE
+
+Usage:  purge [name]
+
+Purge destroys things. If used with no arguments, it will clear a room of all
+mobiles and objects, but will not harm players or vehicles. If the argument is
+an object, that object (and all of its contents, if any) will be destroyed. If
+the argument is a mobile, the mobile will be destroyed, leaving its inventory
+and equipment lying on the ground. This command is grantable.
+
+If the argument is the name of a player, the player's inventory and equipment
+will drop on the ground and the player will lose his/her connection. For this
+reason, PURGE should only be used on players in disciplinary situations.
+
+You can also purge vehicles this way, but the no-argument room purge will
+ignore them. Anything inside a purged vehicle will be lost.
+
+Examples:
+
+  > purge
+  > purge Pom
+  > purge sword
+  > purge dragon
+
+See also: DC, GRANT
+#d
+RANDOM
+
+Usage:  random
+
+This is used to go to a random room on the world map. It's very useful for
+finding new places to build an island.
+#d
+REBOOT
+
+Usage:  reboot [now | minutes]
+
+You can use this to either trigger an instant reboot, or count one down. 
+Because this is a reboot and saves everything, no information is ever lost.
+However, players also enjoy some warning and may appreciate knowing that
+you're going to reboot. It may also interrupt their fighting.
+
+To reboot immediately, use the 'now' option. Otherwise, typing it with no
+arguments displays the current status. This command is grantable.
+
+See also: GRANT
+#d
+RELOAD
+
+Usage:  reload < '*' | all | file >
+
+Reload is used to reload text files such as the MOTD from disk into memory. 
+Reload * reloads all the text files below. This command is grantable.
+
+Valid files are:
+
+  credits    (/mud_dir/lib/text/credits)
+  intros     (/mud_dir/lib/text/intros/*)
+  handbook   (/mud_dir/lib/text/handbook)
+  help       (/mud_dir/lib/text/help)
+  immlist    (/mud_dir/lib/text/immlist)
+  imotd      (/mud_dir/lib/text/imotd)
+  news       (/mud_dir/lib/text/news)
+  motd       (/mud_dir/lib/text/motd)
+  info       (/mud_dir/lib/text/info)
+  policy     (/mud_dir/lib/text/policies)
+  wizlist    (/mud_dir/lib/text/wizlist)
+  xhelp      (/mud_dir/lib/text/help/*)
+  data       (/mud_dir/lib/misc/game_data)
+
+See also: GRANT
+#d
+RESCALE
+
+Usage:  rescale <thing> <level>
+
+This command allows you to rescale a mob, item, or vehicle. It checks for a
+matching mob in the room first, then a vehicle, then an item in your inventory,
+then an item on the ground. This command is grantable.
+
+The level you choose will still be constrained by the mob/item's minimum and
+maximum scale value.
+
+Caution: Rescaling an item will almost always cause it to be re-loaded and it
+will lose any enchantments or modifications.
+
+See also: GRANT
+#d
+RESTORE
+
+Usage:  restore <player | mobile>
+
+RESTORE restores a player or mobile to full hit, mana, and movement points.
+It also resets all cooldowns. This command is grantable.
+
+If used on immortals, it also sets all skill levels to 100 and grants all
+abilities (on the first skill set only).
+
+See also: GRANT, SKILL SWAP
+#d
+RETURN
+
+Usage:  return
+
+RETURN returns you to your regular body if you are switched into a mob.
+
+See also: SWITCH
+#d
+ROOMFLAGS "TOGGLE ROOMFLAGS" "ROOM FLAGS"
+
+Usage:  toggle roomflags
+
+This immortal toggle allows you to see flags and vnums on the "look" command.
+
+See also: TOGGLE
+#d
+SET
+
+Usage:  set [file | player] <character> <field> <value>
+
+SET is an extremely powerful command, capable of setting dozens of aspects of
+characters, both players and mobiles. This command is grantable.
+
+SET PLAYER forces set to look for a player and not a mobile; useful for
+players with names such as 'guard'.
+
+SET FILE lets you change players who are not logged on. If you use SET FILE
+on a player who IS logged on, your change will be lost. If you wish to set a
+player who is in the game but is linkless, use set twice -- once with the FILE
+argument, and once without -- to make sure that the change takes.
+
+For toggled fields (BINARY), the value must be ON, OFF, YES, or NO.
+
+The following are valid fields:
+
+Field          Who     Value Type   Description
+----------------------------------------------------------------
+account        PC      NAME         Sets account to match another character
+age            BOTH    NUMBER       Player age
+bonustrait     PC      MISC         Set bonus traits for player
+bonusexp       PC      NUMBER       Set daily bonus exp for the player
+coins          PC      MISC         Sets coins on-hand for player
+faction        PC      MISC         Change faction reputations (SET FACTION)
+grants         PC      MISC         Set grants for player
+invstart       PC      BINARY       Invisible @ Start
+lastname       PC      STRING       Player's last name, or off
+level          PC      NUMBER       Player's immortal level
+loadroom       PC      MISC         Player always starts here
+name           PC      STRING       Change a player's name
+password       PC      STRING       Change password
+sex            BOTH    MISC         Person's sex
+skill          PC      MISC         Changes a skill level
+title          PC      STRING       Player's title
+vampire        PC      BINARY       Makes/unmakes vampires
+
+blood          NPC     NUMBER       Maximum blood
+health         NPC     NUMBER       Maximum health
+mana           NPC     NUMBER       Maximum mana
+move           NPC     NUMBER       Maximum moves
+
+strength       BOTH    NUMBER       Strength attribute
+dexterity      BOTH    NUMBER       Dexterity attribute
+charisma       BOTH    NUMBER       Charisma attribute
+greatness      BOTH    NUMBER       Greatness attribute
+intelligence   BOTH    NUMBER       Intelligence attribute
+wits           BOTH    NUMBER       Wits attribute
+
+drunk          BOTH    MISC         Drunkenness
+hunger         BOTH    MISC         Hunger level
+thirst         BOTH    MISC         Thirst level
+
+frozen         PC      BINARY       Player is frozen
+incognito      PC      BINARY       Turns on/off incognito mode (imms only)
+ipmask         PC      BINARY       IP address is hidden
+multi-ip       PC      BINARY       Can log in more than 1 account per IP
+multi-char     PC      BINARY       Can log in more than 1 char per account
+muted          PC      BINARY       Player is muted
+nocustomize    PC      BINARY       Player cannot use 'customize'
+nodelete       PC      BINARY       Can't be deleted
+noidleout      PC      BINARY       Won't idle out
+notitle        PC      BINARY       Can't change title
+nowizlist      PC      BINARY       Doesn't show on wizlist
+siteok         PC      BINARY       Can log in through ban
+wizhide        PC      BINARY       Turns on/off wizhide
+
+scale          NPC     NUMBER       Rescales a mob to a given level
+
+See also: GRANT, STAT
+#d
+"SET FACTION"
+
+Usage:  set [file] <player> faction <name/vnum> <rep/value>
+        set [file] <player> faction <name/vnum> none
+
+This allows you to change a player's faction reputation to any reputation
+level (e.g. "Revered") or specific point value.
+
+You can delete a reputation entirely by setting it to 'none'.
+
+See also: FACTION, SHOW FACTIONS
+#d
+SHOW
+
+Usage:  show <mode> [argument]
+
+The SHOW command displays information. Some modes of show require additional
+information, such as a player name. 'show' without a mode gives a quick list of
+the options below. Valid Modes:
+
+Mode       Level    Description
+------     ------   -------------
+stats      God      Shows game stats including prototypes.
+arrowtypes Immort   Shows the 'arrow type' setting for all bows and arrows.
+components Immort   Shows all items matching a component type (and flags).
+dailycycle Immort   Shows daily quests with a given cycle id.
+factions   Immort   Shows a player's faction levels.
+ignoring   Immort   Shows you who a player has on their ignore list.
+islands    Immort   Shows you which island ids have empire storage (for MOVEEINV).
+notes      Immort   Show notes on a player.
+player     Immort   Shows player summary information.
+players    Immort   Shows health and status for all current players.
+quests     Immort   Shows quests and quest trackers for players.
+rent       Immort   Shows a player's full equipment and inventory.
+skills     Immort   Shows skill levels and abilities for a player.
+spawns     Immort   Shows where a mob spawns on the map, similar to ".mob search".
+startlocs  Immort   Shows the location of all starting location tiles.
+storage    Immort   Shows items that can be stored in a given building/room type.
+terrain    Immort   Shows total counts for all terrain types.
+uses       Immort   Shows crafts (and vehicles, etc.) that use a component type.
+workforce  Immort   Shows you an empire's workforce setup.
+variables  Immort   Shows script variables on a player character.
+commons    Asst     Shows players currently connected from duplicate sites.
+site       Asst     Shows all players with a specific site segment.
+account    Co-Impl  Shows all the alts associated with a given player.
+data       Co-Impl  Shows data stored in the global data system
+
+Each of these commands has its own help file (for example, HELP SHOW STATS)
+
+See also: STAT, STARTING LOCATION
+#e
+"SHOW STATS"
+
+Usage:  show stats
+
+Shows some game statistics, similar to the ones you see when quitting, and
+including both instances in the world and prototypes.
+#e
+"SHOW ARROWTYPES"
+
+Usage:  show arrowtypes
+
+Lists all bows and arrows by arrowtype. Useful for figuring out what arrowtype
+to use for a new weapon/ammo.
+#e
+"SHOW COMPONENTS"
+
+Usage:  show components <type> [flags]
+
+This command allows you to look up objects that are a given component type.
+If you specify any flags, all those flags must match the output.
+
+For a list of component types, see: HELP COMPONENT TYPES
+For a list of component flags, see: HELP COMPONENT FLAGS
+#e
+"SHOW DAILYCYCLE" "SHOW DAILY CYCLE"
+
+Usage:  show dailycycle <number>
+
+This command will find all daily quests that share a certain cycle id.
+
+See also:  QEDIT DAILYCYCLE
+#e
+"SHOW FACTIONS"
+
+Usage:  show factions <player> [filter]
+
+This command shows you all of a player's faction reputation levels. It can
+be filtered by name.
+
+See also: FACTION, SET FACTION
+#e
+"SHOW IGNORING"
+
+Usage:  show ignoring <player name>
+
+Shows you who a player is ignoring.
+
+See also: IGNORE, SHOW
+#e
+"SHOW ISLANDS"
+
+Usage:  show islands <empire name>
+
+The immortal version of the 'islands' command; useful for MOVEEINV. You can use
+an empire's leaderboard rank in place of its name, but not vnum.
+
+See also: ISLANDS, MOVEEINV
+#e
+"SHOW NOTES"
+
+Usage:  show notes <player name>
+
+Shows immortal notes for the target player's account.
+#e
+"SHOW PLAYER"
+
+Usage:  show player <player name>
+
+Shows some basic technical information about the target player. Not to be
+confused with SHOW PLAYERS.
+#e
+"SHOW PLAYERS"
+
+Usage:  show players
+
+Shows the names and current and max health, moves, mana and blood of all online
+players. Not to be confused with SHOW PLAYER.
+
+See also: USERS
+#e
+"SHOW RENT"
+
+Usage:  show rent <player name>
+
+Shows the target player's inventory and equipment. Used to show the binary file
+path to their inventory data, hence the name.
+#e
+"SHOW SKILLS"
+
+Usage:  show skills <player name> [swap]
+
+Shows the target player's skills and abilities. The optional "swap" argument
+shows the player's alternate set of abilities.
+#e
+"SHOW SPAWNS"
+
+Usage:  show spawns <mob vnum>
+
+Shows what sectors/crops a mob spawns on, percentile chance for it to spawn, and
+what conditions it has. Takes a mob's virtual number, not a name.
+#e
+"SHOW STARTLOCS"
+
+Usage:  show startlocs
+
+Lists all possible starting locations, including name and coordinates.
+#e
+"SHOW STORAGE"
+
+Usage:  show storage [building name]
+
+Lists objects which store in the named building, or the current building if none
+is specified. Takes a name, not a virtual number.
+#e
+"SHOW TERRAIN"
+
+Usage:  show terrain
+
+Lists the total count of each sector and crop type in the world. Buildings are
+all listed together under 'Building'.
+#e
+"SHOW USES"
+
+Usage:  show uses <type> [flags]
+
+This command looks up buildings, crafts, vehicles, and augments that require a
+given component type. If you specify any flags, all those flags must match the
+output.
+
+For a list of component types, see: HELP COMPONENT TYPES
+For a list of component flags, see: HELP COMPONENT FLAGS
+#e
+"SHOW WORKFORCE"
+
+Usage:  show workforce <empire name>
+
+Shows you an empire's workforce setup exactly as it would appear to a members
+of that empire using the 'workforce' command.
+#e
+"SHOW VARIABLES"
+
+Usage:  show variables <player name>
+
+Shows you the names and values of all of the DG Scripts variables attached
+(using 'remote') to the target player. 'stat mob <target>' is used instead to
+see script variables for NPCs.
+#e
+"SHOW COMMONS"
+
+Usage:  show commons
+
+Shows the names of any characters connected from IPs they share with another
+character. By default, this isn't possible without a MULTI-IP flag.
+#e
+"SHOW SITE"
+
+Usage:  show site <string>
+
+Shows all players connected from a site containing the specified string (it can
+occur in the middle or at the end, not just at the beginning).
+#e
+"SHOW ACCOUNT"
+
+Usage:  show account <player name>
+
+Shows all characters associated with the target character's account (the target
+player's alternates).
+#e
+"SHOW QUESTS"
+
+Usage:  show quests <player> [active | completed | quest name]
+
+This option allows you to see what quests players are on, and their progress.
+If you don't specify an option, you will see their list of active quests.
+#e
+SHUTDOWN
+
+Usage:  shutdown [now | timer] [die | pause]
+
+SHUTDOWN shuts the MUD down. The SHUTDOWN command works in conjunction with
+EmpireMUD's 'autorun' script. If you are not using autorun, the arguments are
+meaningless. If you are using autorun, the following arguments are available:
+
+die - Kill the autorun script; the MUD will not reboot until autorun is
+   explicitly run again.
+pause - Create a file called 'pause' in Empire's root directory; do not
+   try to restart the MUD until 'paused' is removed.
+
+You can also set a timer, giving the players some warning before the reboot.
+
+If you type this command with no arguments, it will give the current status.
+If you want to shutdown with no timer, use the 'now' option. This command is
+grantable.
+
+See also: GRANT, REBOOT
+#d
+SLAY
+
+Usage:  slay
+
+This is an instant-kill power for the Implementor which was originally part of
+CircleMUD's normal kill command. It has been filtered out because we found it
+to be easier to have it separate. This command is grantable.
+
+See also: GRANT
+#d
+SNOOP
+
+Usage:  snoop [player]
+
+Snoop allows you to listen in on another player's session; everything the
+player sees or types will be displayed on your terminal preceded by a '%'. This
+command is grantable.
+
+Obviously, there are many ethical considerations to the use of this command;
+snoop should be used minimally, and only for disciplinary purposes.
+
+Type snoop <your name> or just snoop to stop snooping.
+
+See also: GRANT
+#d
+STAT
+
+Usage:  stat [type] [name]
+
+Gives information about players, animals, and objects in the game. The type
+argument is optional.
+
+STAT PLAYER will search only for players; useful for statting people with
+names such as Wolf or Dolph.
+
+STAT OBJECT will search only for objects.
+
+STAT MOBILE will search only for animals.
+
+STAT FILE is used to stat players who are not logged in; the information
+displayed comes from the playerfile.
+
+Examples:
+
+  > stat dog
+  > stat player wolf
+  > stat mobile wolf
+  > stat file niandra
+  > stat object shawl
+
+See also: VSTAT
+#d
+SWITCH
+
+Usage:  switch <monster>
+
+SWITCH is used to take over the body of mobiles; useful for interactive
+adventures. If the monster in which you are switched is killed you will be
+returned to your own body. This command is grantable.
+
+See also: GRANT, RETURN
+#d
+SYSLOG
+
+Usage:  syslog [add | remove] [type]
+        syslog all
+
+The SYSLOG command controls how detailed of an on-line system log you see.
+Messages surrounded by '[' and ']' are syslog messages and are in green
+if you have color on. If they are only shown to high-level imms, the level will
+be indicated.
+
+See also: TOGGLE
+#d
+TEDIT
+
+Usage:  tedit <message>
+
+Allows you to alter a game message or text file from within the game. This
+command is grantable.
+
+See also: GRANT
+#d
+TELEPORT
+
+Usage:  teleport <person/location>
+
+This command allows a god to teleport from one location to another. The target
+location may be coordinates like (123, 456). It may be a player, or even a
+room vnum.
+
+See also: POOFIN, POOFOUT
+#e
+UNBIND
+
+Usage:  unbind <item>
+
+This immortal command removes the binding on an object that is bind-on-equip
+or bind-on-pickup. It will re-bind to the next mortal it's given to. This
+command is grantable.
+
+See also: BINDING, GRANT
+#d
+UNQUEST
+
+Usage:  unquest <player> <quest vnum>
+
+This command removes a quest from a player's current- and completed-quests
+lists. The player receives no message. This command is grantable.
+
+See also: GRANT
+#d
+UPTIME
+
+Usage:  uptime
+
+Displays when the game was booted and calculates how long ago that was.
+#d
+USERS
+
+Usage:  users [switches]
+
+USERS gives a list of all sockets (i.e., connections) currently active on the
+MUD. The multi-column display shows the socket number (used by DC), class,
+level, and name of the player connected, connection state, idle time, and
+hostname. This command is grantable.
+
+The following switches are available:
+
+-k or -o   Show only outlaws (killers and thieves).
+-p         Show only sockets in the playing sockets.
+-d         Show only non-playing (deadweight) sockets.
+-l min-max Show only sockets whose characters are from level min to max.
+-n <name>  Show the socket with <name> associated with it.
+-h <host>  Show all sockets from <host>.
+
+See also: DC, GRANT
+#d
+UTILITY
+
+Usage:  utility <option> <arguments>
+
+This is a generic command that houses several simple utilities for immortals.
+They generally have no game effect, but can help with testing.
+
+Available utilities:
+ &cb318buildings&0 - Finds buildings using flags that were deprecated in 2.0b3.18.
+ &cclearroles&0 - Clears the class roles and class abilities of all players.
+ &cdiminish <number> <scale>&0 - Applies the game's diminishing returns formula,
+    and returns the result.
+ &cislandsize&0 - Counts and displays tile counts for all islands.
+ &cplayerdump&0 - Outputs a data file with tab-separated lines for all players with
+    account, playtime, and host.
+ &crandtest [number] [size]&0 - Generates a large number of random numbers, and
+    reports the results.
+ &credoislands&0 - Renumbers all the islands (requires confirmation; may rearrange
+    empire inventories).
+ &crescan <empire | all>&0 - Rereads territory and members, which can fix issues.
+ &cresetbuildingtriggers <vnum | all>&0 - Reattaches triggers to buildings/rooms,
+    e.g. if you made a change in OLC and want live buildings updated.
+ &cstrlen&0 - Give various measures of string length.
+ &cyearly&0 - Runs a full annual update on the world.
+#d
+VNUM
+
+Usage:  vnum <type> <keywords>
+
+Gives a list of the virtual numbers of objects or mobiles which have the
+specified name. If you specify more than one keyword, it will find things
+that match ALL of those keywords.
+
+Valid types are: adventure, ability, archetype, augment, book, building, craft,
+                 class, crop, faction, global, mob, morph, obj, quest,
+                 roomtemplate, sector, skill, social, trigger, vehicle
+
+Examples:
+
+  > vnum obj ring
+  1. [  904] a platinum ring
+  2. [ 2543] a seashell ring
+  3. [ 2588] a small emerald ring
+  
+  > vnum mob dragon
+  1. [    1] Puff
+  2. [  908] the dragon turtle
+  3. [ 2548] the Master of Illusions
+#d
+VSTAT
+
+Usage:  vstat <type> <vnum>
+
+Used to stat a prototypical object by virtual number.
+
+Valid types are: adventure, ability, archetype, augment, building, book, craft,
+                 class, crop, faction, global, mob, morph, obj, quest,
+                 roomtemplate, sector, skill, social, trigger, vehicle
+
+Examples:
+
+  > vstat obj 3000
+  > vstat mob 3001
+
+See also: LOAD, STAT, VNUM
+#d
+WIZHELP
+
+Usage:  wizhelp
+
+Gives a list of the special commands available at your level.
+#d
+WIZHIDE
+
+Usage: toggle wizhide
+
+This command prevents you from appearing in the room to players with lower
+access levels and players without holylight. They cannot target you in the
+room, and your poofin, poofout and movement will be invisible, along with most
+other room messages you cause. Mortals will still see any messages sent
+directly to them, such as if you look at them.
+
+You'll still show up in the "who" list, and players can still send you tells.
+
+See also: INVIS, HOLYLIGHT, TOGGLE, WIZHIDE
+#d
+WIZLOCK
+
+Usage:  wizlock [value] [message]
+
+WIZLOCK allows you to restrict the game. WIZLOCK 1 prevents new characters
+from being created. WIZLOCK n prevents new characters and allows only
+characters level n and above to log on. WIZLOCK with no argument displays the
+current WIZLOCK level. You can also send a message to people trying to
+connect. This command is grantable.
+
+The current wizlock level appears on the %x/%X prompt codes.
+
+See also: BAN, GRANT
+#d
+WIZNET ;
+
+The immortal communication channel.
+
+As with most similar channels, you can start chats with * (asterisk) to make
+them channel-emotes.
+
+Usage:  wiznet [#<level>] <text>
+
+Examples:
+
+  > ; <text>    - just sends text
+  > ; #7 <text> - sends text only to people level 7 or higher
+
+See also: NOWIZ, GHISTORY
+#d
+XNAME XNAMES "XNAME FILE"
+
+The lib/misc/xnames file contains a list of forbidden names. Any entry that
+begins with a % (percent) will match partial names as well.
+#d
+$
