@@ -15,13 +15,13 @@ mud_location
 mud_minimum_age 
 mud_name EmpireMUD
 mud_status Live
-mud_website
+mud_website 
 newyear_message The ground under you shakes violently!
 no_person No-one by that name here.
 ok_string Okay.
 public_logins 0
 starting_year 1150
-welcome_message Welcome to your EmpireMUD! Prepare to face your destiny!
+welcome_message Welcome to Tales from the Rim!
 *
 * Actions configs
 chip_timer 4
@@ -88,7 +88,6 @@ time_to_empire_emptiness 2
 whole_empire_timeout 30
 *
 * Items configs
-auto_update_items 1
 autostore_time 180
 bound_item_junk_time 10080
 long_autostore_time 720
@@ -100,6 +99,7 @@ scale_pack_size 8.000000
 scale_points_at_100 4.000000
 *
 * Mobs configs
+auto_update_items 1
 max_npc_attribute 15
 mob_despawn_radius 3
 mob_pursuit_distance 25
@@ -172,8 +172,8 @@ fire_extinguish_value 120
 hostile_flag_time 60
 hostile_login_delay 30
 mutual_war_only 0
-rogue_flag_time 1440
 pvp_timer 5
+rogue_flag_time 1440
 seconds_per_death 30
 stolen_object_timer 30
 stun_immunity_time 5
