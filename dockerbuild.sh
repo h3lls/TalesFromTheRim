@@ -1,5 +1,5 @@
 #!/bin/sh
-cd /TalesFromTheRim
+cd /TalesFromTheRim/
 ./configure
 cd /TalesFromTheRim/src
 make
