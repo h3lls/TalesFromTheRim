@@ -72,6 +72,7 @@ typedef struct descriptor_data descriptor_t;
 #define TELOPT_MSP  90
 #define TELOPT_MXP  91
 #define TELOPT_ATCP  200
+#define TELOPT_GMCP  201
 
 #define MSDP_VAR  1
 #define MSDP_VAL  2
