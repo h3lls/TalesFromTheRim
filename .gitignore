@@ -1,4 +1,6 @@
-config.*
+config.log
+config.cache
+config.status
 syslog
 syslog.CRASH
 .DS_Store
