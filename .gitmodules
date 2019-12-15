@@ -1,3 +1,6 @@
 [submodule "lib/TalesFromTheRimWorld"]
 	path = lib/TalesFromTheRimWorld
 	url = git@github.com:h3lls/TalesFromTheRimWorld.git
+[submodule "lib"]
+	path = lib
+	url = git@github.com:h3lls/TalesFromTheRimWorld.git
