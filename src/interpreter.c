@@ -1982,7 +1982,7 @@ void send_motd(descriptor_data *d) {
 void send_login_motd(descriptor_data *desc, int bad_pws) {
 	send_motd(desc);
 	MXPSendTag(desc, "<VERSION>");
-	
+
 	/* Check bad passwords */
 	if (bad_pws) {
 		sprintf(buf, "\r\n\r\n\007\007\007&r%d LOGIN FAILURE%s SINCE LAST SUCCESSFUL LOGIN.&0\r\n", bad_pws, (bad_pws > 1) ? "S" : "");
