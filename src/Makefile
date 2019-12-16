@@ -63,7 +63,7 @@ all: .accepted
 
 .accepted:
 	echo "test"
-	#@./licheck more
+	#@./licheck less
 
 utils: .accepted
 	(cd util; $(MAKE) all)
