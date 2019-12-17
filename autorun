@@ -42,6 +42,8 @@ while ( : ) do
   DATE=`date`
   echo "autorun starting game $DATE" >> syslog
   echo "running bin/empire $FLAGS $PORT" >> syslog
+  pkill -f bot.py
+  pkill -f bot.py
 
   bin/empire $FLAGS $PORT >> syslog 2>&1
 
