@@ -28,6 +28,7 @@ client = discord.Client()
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 def telnet(client):
+    global s
     pool = concurrent.futures.ThreadPoolExecutor()
     channel = None
     global getting_who, logged_in
@@ -38,12 +39,26 @@ def telnet(client):
         s.connect((mud_host, mud_port))
     except :
         print('Unable to connect')
-        sys.exit()
+        os._exit()
 
     print('Connected to remote host')
 
+    reconnect = False
     while 1:
         time.sleep(1)
+        if reconnect:
+            logged_in = False
+            print("Reconnecting")
+            # connect to remote host
+            try :
+                s.connect((mud_host, mud_port))
+            except :
+                print('Unable to connect')
+                s.close()
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                continue
+            reconnect = False
+
         socket_list = [sys.stdin, s]
         
         # Get the list sockets which are readable
@@ -55,7 +70,9 @@ def telnet(client):
                 data = sock.recv(4096)
                 if not data:
                     print('Connection closed')
-                    sys.exit()
+                    reconnect = True
+                    s.close()
+                    break
                 else:
                     data = data.decode('utf-8', 'backslashreplace')
                     #print('\\x'.join(hex(ord(x))[2:] for x in data))
@@ -113,7 +130,7 @@ def telnet(client):
 
 @client.event
 async def on_message(message):
-    global getting_who
+    global getting_who, s
     if message.author == client.user:
         return
     if message.channel.id != discord_channel:
