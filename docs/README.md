@@ -1,5 +1,6 @@
-![Green Planet](greenplanet.png ':size=800')
 # Tales From The Rim  
+
+![Green Planet](greenplanet.png ':size=800')
 
 A world living on the Rim of the galaxy.
 
