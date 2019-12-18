@@ -113,3 +113,13 @@ To validate your changes login to mudding.online port 5001
 
 After you have tested in dev ask for a review and for the change to be merged in to master. After that at the next release your changes will be rolled in to the production system.  
 
+### After The Pull Request
+
+After your pull request has been merged you can switch back to the master branch with:  
+
+```
+git checkout master
+git pull
+```
+
+Ideally for each major change, issue, or bug you should be creating a branch.
