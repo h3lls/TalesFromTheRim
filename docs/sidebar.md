@@ -1,5 +1,6 @@
-- [Mud Development](/)
-- [Immortal Documentation](/building/README.md)
+- [Home](/?id=main)
+- [Immortal Guides](/building/README.md)
+- [Developer Help](/developer/README.md)
 - **Links**
 - [Github](https://github.com/h3lls/TalesFromTheRim)
 - [EmpireMUD](https://github.com/EmpireMUD/EmpireMUD-2.0-Beta)

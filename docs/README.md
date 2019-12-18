@@ -1,12 +1,5 @@
-# Development Setup
+# Tales From The Rim
 
-You will need a few tools to clone and build the project.
+A world living on the Rim of the galaxy.
 
-### Required Tools
-
-Git 
-
-You can setup your repository by first cloning the project with:
-
-
-> Dev tools required vary between systems, this documentation assumes that you are on a Windows PC.
+> Please see the subsections for details on developer or immortal help
