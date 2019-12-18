@@ -1,0 +1,5 @@
+- [Mud Development](/)
+- [Immortal Documentation](/building/README.md)
+- **Links**
+- [Github](https://github.com/h3lls/TalesFromTheRim)
+- [EmpireMUD](https://github.com/EmpireMUD/EmpireMUD-2.0-Beta)
