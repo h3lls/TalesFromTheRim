@@ -79,8 +79,11 @@ git checkout -b fix-protocol-error
 
 ### Making Changes
 
-After you have made your changes you can call:  
-
+If you have created one or more files or folder you can add them to git with:
+```
+git add myfile
+```
+After you have made your changes to push the commit to the local repository you can call:  
 ```
 git commit -m "Adding changes to fix protocol error"
 ```
@@ -89,7 +92,7 @@ After the commit you can do a push which will commit the changes to the remote (
 ```
 git push
 ```
-
+  
 From this point if you feel that the code is tested and working properly and hasn't caused gross unexpected side-effects and bugs then you can create a pull request.  
 
 ### Creating a Pull Request
