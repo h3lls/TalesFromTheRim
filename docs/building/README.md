@@ -6,7 +6,7 @@ Documentation for building and running the mud.
 
 In the player file (.plr) you must have access level > 0:
 
-Levels:
+Levels: 
 
 To edit find the following line in the .plr file.
 Access Level:
