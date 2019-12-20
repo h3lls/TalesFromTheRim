@@ -1699,7 +1699,7 @@ void prompt_creation(descriptor_data *d) {
 			break;
 		}
 		case CON_QSEX: {
-			SEND_TO_Q("\r\nWhat is your sex (M/F)? ", d);
+			SEND_TO_Q("\r\nWhat is your sex (M)ale, (F)emale, (N)eutral? ", d);
 			break;
 		}
 		case CON_Q_ARCHETYPE: {
@@ -2511,6 +2511,9 @@ void nanny(descriptor_data *d, char *arg) {
 					break;
 				case 'f':
 					d->character->player.sex = SEX_FEMALE;
+					break;
+				case 'n':
+					d->character->player.sex = SEX_NEUTRAL;
 					break;
 				default:
 					SEND_TO_Q("That is not a sex...\r\nWhat IS your sex? ", d);
