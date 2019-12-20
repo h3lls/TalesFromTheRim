@@ -2,6 +2,15 @@
 
 Documentation for building and running the mud.
 
+## Setting up New Immortals
+
+In the player file (.plr) you must have access level > 0:
+
+Levels: 
+
+To edit find the following line in the .plr file.
+Access Level:
+
 ## Creating instances
 
 Use the commands to bring things to life in the MUD based on an existing vnum (unique number for a template of an object of some type).
