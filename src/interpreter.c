@@ -2516,7 +2516,7 @@ void nanny(descriptor_data *d, char *arg) {
 					d->character->player.sex = SEX_NEUTRAL;
 					break;
 				default:
-					SEND_TO_Q("That is not a sex...\r\nWhat IS your sex? ", d);
+					SEND_TO_Q("Please choose M / F / N ...\r\nWhat IS your sex? ", d);
 					return;
 			}
 
