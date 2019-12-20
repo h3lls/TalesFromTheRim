@@ -15,11 +15,11 @@ def on_push(data):
 
 @webhook.hook("pull_request")
 def on_pull_request(data):
-    print(data['repository'])
+    # print(data['repository'])
     if data['action'] != 'merged' and data['action'] != 'closed':
         branch = data['pull_request']['head']['ref']
         clone_url = data['repository']['ssh_url']
-        print(os.popen("./builddev.sh {0} {1}".format(clone_url, branch)).read())
+        print(os.popen("/TalesFromTheRim/githubhook/builddev.sh {0} {1}".format(clone_url, branch)).read())
 
 @webhook.hook("release")
 def on_release(data):

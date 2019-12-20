@@ -1,3 +1,5 @@
+set -x
+
 echo "URL"
 echo $1
 

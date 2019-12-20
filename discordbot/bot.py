@@ -75,8 +75,7 @@ def telnet(client):
                     break
                 else:
                     data = data.decode('utf-8', 'backslashreplace')
-                    #print('\\x'.join(hex(ord(x))[2:] for x in data))
-                    #print(data.strip())
+
                     if getting_who:
                         print("Getting who in loop")
                         print(data.strip())
@@ -101,7 +100,6 @@ def telnet(client):
                             send_text = "**" + user + "**: " + data[data.find('"')+1:-1]
                             print("sending to discord: " + send_text)
                             message_queue.put_nowait(send_text)
-                    # [CONNLOG: [60500] Radiotower [ip72-199-36-114.sd.sd.cox.net] has connected.]
                     elif "has entered the game" in data:
                         data = data.strip()
                         user = data.split('[ ')[1].split(' has entered')[0]
@@ -124,9 +122,6 @@ def telnet(client):
                         s.send("\n".encode())
                     elif "Enter the game" in data:
                         s.send("1\n".encode())
-            else :
-                msg = sys.stdin.readline()
-                s.send(msg.encode())
 
 @client.event
 async def on_message(message):
@@ -143,8 +138,6 @@ async def on_message(message):
     send_text = ooc_command + " Discord: " + message.author.display_name + " says " + message.content + "\n"
     print("sending to mud: " + send_text)
     s.send(send_text.encode())
-    # message.content
-    # message.author.display_name
 
 @client.event
 async def on_ready():
