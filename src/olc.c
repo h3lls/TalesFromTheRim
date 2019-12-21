@@ -2663,8 +2663,7 @@ OLC_MODULE(olc_find) {
 	char arg[MAX_INPUT_LENGTH];
 	char *match_string;
 	any_vnum from_vnum = NOTHING, to_vnum = NOTHING, iter;
-	bool found_from = FALSE, found_to = FALSE;
-	bool found_search = FALSE;
+	bool found_match = FALSE;
 	bool show_details = FALSE;
 	int count = 0, len;
 	
@@ -2684,8 +2683,9 @@ OLC_MODULE(olc_find) {
 	while (*argument) {
 		argument = any_one_arg(argument, arg);
 
-		if (!found_from) {
+		if (!found_match) {
 			match_string = arg;
+			found_match = TRUE;
 			continue;
 		}
 		
@@ -2722,15 +2722,15 @@ OLC_MODULE(olc_find) {
 		}
 		
 		// reached an error
-		msg_to_char(ch, "Usage: find <thing> [-d]\r\n");
+		msg_to_char(ch, "Usage: find <thing>\r\n");
 		return;
 	}
 	from_vnum = 0;
 	to_vnum = 999999;
 	//found_to = TRUE;	
-	// if (!found_from) {	// no useful args
-	// 	msg_to_char(ch, "Usage: list <from vnum> [to vnum] [-d]\r\n");
-	// }
+	if (!found_match) {	// no useful args
+		msg_to_char(ch, "Usage: find <thing>\r\n");
+	}
 	// else if (from_vnum < 0) {
 	// 	msg_to_char(ch, "Invalid vnum range.\r\n");
 	// }
@@ -2753,13 +2753,7 @@ OLC_MODULE(olc_find) {
 				}
 				if (ABIL_VNUM(abil) >= from_vnum && ABIL_VNUM(abil) <= to_vnum) {
 					++count;
-					char *ability_string;
-					ability_string = list_one_ability(abil, show_details);
-					//msg_to_char(ch, ability_string);
-					//msg_to_char(ch, match_string);
-					//sprintf(ability_string, "Cmp Result: %s\r\n", strstr(ability_string, match_string));
-					//msg_to_char(ch, ability_string);
-					if (strstr(ability_string, match_string) != NULL) {
+					if (strstr(strtoupper(list_one_ability(abil, show_details)), strtoupper(match_string)) != NULL) {
 						len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_ability(abil, show_details));
 					}
 				}
@@ -2775,7 +2769,9 @@ OLC_MODULE(olc_find) {
 				}
 				if (GET_ADV_VNUM(adv) >= from_vnum && GET_ADV_VNUM(adv) <= to_vnum) {
 					++count;
-					len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_adventure(adv, show_details));
+					if (strstr(strtoupper(list_one_adventure(adv, show_details)), strtoupper(match_string)) != NULL) {
+						len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_adventure(adv, show_details));
+					}
 				}
 			}
 			break;
@@ -2789,7 +2785,9 @@ OLC_MODULE(olc_find) {
 				}
 				if (GET_ARCH_VNUM(arch) >= from_vnum && GET_ARCH_VNUM(arch) <= to_vnum) {
 					++count;
-					len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_archetype(arch, show_details));
+					if (strstr(strtoupper(list_one_archetype(arch, show_details)), strtoupper(match_string)) != NULL) {
+						len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_archetype(arch, show_details));
+					}
 				}
 			}
 			break;
@@ -2803,7 +2801,9 @@ OLC_MODULE(olc_find) {
 				}
 				if (GET_AUG_VNUM(aug) >= from_vnum && GET_AUG_VNUM(aug) <= to_vnum) {
 					++count;
-					len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_augment(aug, show_details));
+					if (strstr(strtoupper(list_one_augment(aug, show_details)), strtoupper(match_string)) != NULL) {
+						len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_augment(aug, show_details));
+					}
 				}
 			}
 			break;
@@ -2817,7 +2817,9 @@ OLC_MODULE(olc_find) {
 				}
 				if (book->vnum >= from_vnum && book->vnum <= to_vnum) {
 					++count;
-					len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_book(book, show_details));
+					if (strstr(strtoupper(list_one_book(book, show_details)), strtoupper(match_string)) != NULL) {
+						len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_book(book, show_details));
+					}
 				}
 			}
 			break;
@@ -2831,7 +2833,9 @@ OLC_MODULE(olc_find) {
 				}
 				if (GET_BLD_VNUM(bld) >= from_vnum && GET_BLD_VNUM(bld) <= to_vnum) {
 					++count;
-					len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_building(bld, show_details));
+					if (strstr(strtoupper(list_one_building(bld, show_details)), strtoupper(match_string)) != NULL) {
+						len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_building(bld, show_details));
+					}
 				}
 			}
 			break;
@@ -2845,7 +2849,9 @@ OLC_MODULE(olc_find) {
 				}
 				if (CLASS_VNUM(cls) >= from_vnum && CLASS_VNUM(cls) <= to_vnum) {
 					++count;
-					len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_class(cls, show_details));
+					if (strstr(strtoupper(list_one_class(cls, show_details)), strtoupper(match_string)) != NULL) {
+						len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_class(cls, show_details));
+					}
 				}
 			}
 			break;
@@ -2859,7 +2865,9 @@ OLC_MODULE(olc_find) {
 				}
 				if (GET_CRAFT_VNUM(craft) >= from_vnum && GET_CRAFT_VNUM(craft) <= to_vnum) {
 					++count;
-					len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_craft(craft, show_details));
+					if (strstr(strtoupper(list_one_craft(craft, show_details)), strtoupper(match_string)) != NULL) {
+						len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_craft(craft, show_details));
+					}
 				}
 			}
 			break;
@@ -2873,7 +2881,9 @@ OLC_MODULE(olc_find) {
 				}
 				if (GET_CROP_VNUM(crop) >= from_vnum && GET_CROP_VNUM(crop) <= to_vnum) {
 					++count;
-					len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_crop(crop, show_details));
+					if (strstr(strtoupper(list_one_crop(crop, show_details)), strtoupper(match_string)) != NULL) {
+						len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_crop(crop, show_details));
+					}
 				}
 			}
 			break;
@@ -2887,7 +2897,9 @@ OLC_MODULE(olc_find) {
 				}
 				if (FCT_VNUM(fct) >= from_vnum && FCT_VNUM(fct) <= to_vnum) {
 					++count;
-					len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_faction(fct, show_details));
+					if (strstr(strtoupper(list_one_faction(fct, show_details)), strtoupper(match_string)) != NULL) {
+						len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_faction(fct, show_details));
+					}
 				}
 			}
 			break;
@@ -2901,7 +2913,9 @@ OLC_MODULE(olc_find) {
 				}
 				if (GET_GLOBAL_VNUM(glb) >= from_vnum && GET_GLOBAL_VNUM(glb) <= to_vnum) {
 					++count;
-					len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_global(glb, show_details));
+					if (strstr(strtoupper(list_one_global(glb, show_details)), strtoupper(match_string)) != NULL) {
+						len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_global(glb, show_details));
+					}
 				}
 			}
 			break;
@@ -2915,7 +2929,9 @@ OLC_MODULE(olc_find) {
 				}
 				if (GET_MOB_VNUM(mob) >= from_vnum && GET_MOB_VNUM(mob) <= to_vnum) {
 					++count;
-					len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_mobile(mob, show_details));
+					if (strstr(strtoupper(list_one_mobile(mob, show_details)), strtoupper(match_string)) != NULL) {
+						len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_mobile(mob, show_details));
+					}
 				}
 			}
 			break;
@@ -2929,7 +2945,9 @@ OLC_MODULE(olc_find) {
 				}
 				if (MORPH_VNUM(morph) >= from_vnum && MORPH_VNUM(morph) <= to_vnum) {
 					++count;
-					len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_morph(morph, show_details));
+					if (strstr(strtoupper(list_one_morph(morph, show_details)), strtoupper(match_string)) != NULL) {
+						len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_morph(morph, show_details));
+					}
 				}
 			}
 			break;
@@ -2943,7 +2961,9 @@ OLC_MODULE(olc_find) {
 				}
 				if (GET_OBJ_VNUM(obj) >= from_vnum && GET_OBJ_VNUM(obj) <= to_vnum) {
 					++count;
-					len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_object(obj, show_details));
+					if (strstr(strtoupper(list_one_object(obj, show_details)), strtoupper(match_string)) != NULL) {
+						len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_object(obj, show_details));
+					}
 				}
 			}
 			break;
@@ -2957,7 +2977,9 @@ OLC_MODULE(olc_find) {
 				}
 				if (QUEST_VNUM(quest) >= from_vnum && QUEST_VNUM(quest) <= to_vnum) {
 					++count;
-					len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_quest(quest, show_details));
+					if (strstr(strtoupper(list_one_quest(quest, show_details)), strtoupper(match_string)) != NULL) {
+						len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_quest(quest, show_details));
+					}
 				}
 			}
 			break;
@@ -2971,7 +2993,9 @@ OLC_MODULE(olc_find) {
 				}
 				if (GET_RMT_VNUM(rmt) >= from_vnum && GET_RMT_VNUM(rmt) <= to_vnum) {
 					++count;
-					len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_room_template(rmt, show_details));
+					if (strstr(strtoupper(list_one_room_template(rmt, show_details)), strtoupper(match_string)) != NULL) {
+						len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_room_template(rmt, show_details));
+					}
 				}
 			}
 			break;
@@ -2984,8 +3008,10 @@ OLC_MODULE(olc_find) {
 					break;
 				}
 				if (GET_SECT_VNUM(sect) >= from_vnum && GET_SECT_VNUM(sect) <= to_vnum) {
-					++count;
-					len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_sector(sect, show_details));
+					++count;					
+					if (strstr(strtoupper(list_one_sector(sect, show_details)), strtoupper(match_string)) != NULL) {
+						len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_sector(sect, show_details));
+					}
 				}
 			}
 			break;
@@ -2999,7 +3025,9 @@ OLC_MODULE(olc_find) {
 				}
 				if (SKILL_VNUM(skill) >= from_vnum && SKILL_VNUM(skill) <= to_vnum) {
 					++count;
-					len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_skill(skill, show_details));
+					if (strstr(strtoupper(list_one_skill(skill, show_details)), strtoupper(match_string)) != NULL) {
+						len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_skill(skill, show_details));
+					}
 				}
 			}
 			break;
@@ -3013,7 +3041,9 @@ OLC_MODULE(olc_find) {
 				}
 				if (SOC_VNUM(soc) >= from_vnum && SOC_VNUM(soc) <= to_vnum) {
 					++count;
-					len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_social(soc, show_details));
+					if (strstr(strtoupper(list_one_social(soc, show_details)), strtoupper(match_string)) != NULL) {
+						len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_social(soc, show_details));
+					}
 				}
 			}
 			break;
@@ -3027,7 +3057,9 @@ OLC_MODULE(olc_find) {
 				}
 				if (GET_TRIG_VNUM(trig) >= from_vnum && GET_TRIG_VNUM(trig) <= to_vnum) {
 					++count;
-					len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_trigger(trig, show_details));
+					if (strstr(strtoupper(list_one_trigger(trig, show_details)), strtoupper(match_string)) != NULL) {
+						len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_trigger(trig, show_details));
+					}
 				}
 			}
 			break;
@@ -3041,7 +3073,9 @@ OLC_MODULE(olc_find) {
 				}
 				if (VEH_VNUM(veh) >= from_vnum && VEH_VNUM(veh) <= to_vnum) {
 					++count;
-					len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_vehicle(veh, show_details));
+					if (strstr(strtoupper(list_one_vehicle(veh, show_details)), strtoupper(match_string)) != NULL) {
+						len += snprintf(buf + len, sizeof(buf) - len, "%s\r\n", list_one_vehicle(veh, show_details));
+					}
 				}
 			}
 			break;
@@ -3050,11 +3084,11 @@ OLC_MODULE(olc_find) {
 	
 	sprintbit(type, olc_type_bits, buf2, FALSE);
 	if (*buf) {
-		snprintf(buf1, sizeof(buf1), "Found %d %s%s:\r\n%s", count, buf2, (count != 1 ? "s" : ""), buf);
+		snprintf(buf1, sizeof(buf1), "Matching %s%s:\r\n%s", buf2, (count != 1 ? "s" : ""), buf);
 		page_string(ch->desc, buf1, TRUE);
 	}
 	else {
-		msg_to_char(ch, "Found no %ss in that range.\r\n", buf2);
+		msg_to_char(ch, "Found no %ss.\r\n", buf2);
 	}
 }
 
