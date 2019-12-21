@@ -2689,32 +2689,6 @@ OLC_MODULE(olc_find) {
 			continue;
 		}
 		
-		// first argument must be a "from" vnum
-		// if (!found_from) {
-		// 	if (!isdigit(*arg)) {
-		// 		msg_to_char(ch, "Invalid vnum.\r\n");
-		// 		return;
-		// 	}
-		// 	from_vnum = atoi(arg);
-		// 	found_from = TRUE;
-		// 	continue;
-		// }
-		// from_vnum = 0;
-		// found_from = TRUE;
-
-		// if (!found_to && isdigit(*arg)) {
-		// 	to_vnum = atoi(arg);
-		// 	found_to = TRUE;
-		// 	continue;
-		// }
-	
-
-		// if (!found_to && isdigit(*arg)) {
-		// 	to_vnum = atoi(arg);
-		// 	found_to = TRUE;
-		// 	continue;
-		// }
-
 		// other types of args:
 		if ((!strn_cmp(arg, "-d", 2) && is_abbrev(arg, "-details")) || (!strn_cmp(arg, "--d", 3) && is_abbrev(arg, "--details"))) {
 			show_details = TRUE;
@@ -2727,16 +2701,9 @@ OLC_MODULE(olc_find) {
 	}
 	from_vnum = 0;
 	to_vnum = 999999;
-	//found_to = TRUE;	
+
 	if (!found_match) {	// no useful args
 		msg_to_char(ch, "Usage: find <thing>\r\n");
-	}
-	// else if (from_vnum < 0) {
-	// 	msg_to_char(ch, "Invalid vnum range.\r\n");
-	// }
-	// 2nd vnum optional
-	if (to_vnum == NOTHING) {
-		to_vnum = from_vnum;
 	}
 
 	*buf = '\0';
