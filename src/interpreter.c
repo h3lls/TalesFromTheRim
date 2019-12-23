@@ -1918,6 +1918,7 @@ bool check_multiplaying(descriptor_data *d) {
 	descriptor_data *c, *next_c;
 	bool ok = TRUE;
 	
+	return TRUE;
 	if (ACCOUNT_FLAGGED(d->character, ACCT_MULTI_CHAR)) {
 		return TRUE;
 	}
