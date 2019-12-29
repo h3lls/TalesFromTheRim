@@ -11,6 +11,12 @@ Levels:
 To edit find the following line in the .plr file.
 Access Level:
 
+## Special Commands
+
+You can see a list of Immortal / God commands by typing:
+
+```wizhelp```
+
 ## Creating instances
 
 Use the commands to bring things to life in the MUD based on an existing vnum (unique number for a template of an object of some type).
@@ -36,12 +42,43 @@ build <buildingtype>
 
 You will need the resources to build the building.
 
-### Creating Instances of Objects
-
-Useful Help: CREATE
-
+**Example:**
 ```
-create <thing>
+> .map terrain plains
+This room is now a Plains.
+> create 10 block
+You create a huge stone block (x10)!
+> build wall east
+You start to build a wall!
+You heave a huge stone blcok into place.
+```
+
+### Creating Instances of Objects for Testing
+
+Useful Help: LOAD
+
+First find the object with:
+```
+.o find <thing>
+```
+After that choose the vnum and load the object:
+```
+load obj <vnum>
+```
+
+This will create an instance of an object and place it in your inventory.
+
+**Example:**
+```
+> .o find knife
+
+Matching objects:
+[ 2215] a copper knife
+[ 9031] the barkeep's knife
+[10853] a stone skinning knife
+
+> load obj 10853
+You create a stone skinning knife.
 ```
 
 ## Creating New Things
