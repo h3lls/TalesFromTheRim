@@ -45,7 +45,7 @@ def telnet(client):
 
     reconnect = False
     while 1:
-        time.sleep(1)
+        asyncio.sleep(1)
         if reconnect:
             logged_in = False
             print("Reconnecting")
@@ -149,7 +149,7 @@ async def on_ready():
             f'{guild.name}(id: {guild.id})'
         )
     while True:
-        time.sleep(1)
+        asyncio.sleep(1)
         message = await message_queue.get()
         try:
             await channel.send(message)
