@@ -1212,6 +1212,9 @@ void perform_idle_out(char_data *ch) {
 	if (!ch) {
 		return;
 	}
+
+	// DISABLE IDLE OUT
+	return;
 	
 	// block idle-out entirely with this prf
 	if (ch->desc && PRF_FLAGGED(ch, PRF_NO_IDLE_OUT)) {
