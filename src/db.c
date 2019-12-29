@@ -2628,9 +2628,9 @@ void reset_time(void) {
 
 	time_info = *mud_time_passed(time(0), beginning_of_time);
 
-	if (time_info.hours <= 6)
+	if (time_info.hours <= 5)
 		weather_info.sunlight = SUN_DARK;
-	else if (time_info.hours == 7)
+	else if (time_info.hours == 6)
 		weather_info.sunlight = SUN_RISE;
 	else if (time_info.hours <= 18)
 		weather_info.sunlight = SUN_LIGHT;
