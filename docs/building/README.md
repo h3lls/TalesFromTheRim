@@ -15,7 +15,9 @@ Access Level:
 
 You can see a list of Immortal / God commands by typing:
 
-```wizhelp```
+```
+wizhelp
+```
 
 ## Creating instances
 
@@ -34,7 +36,7 @@ city found
 
 ### Create Instances of Buildings
 
-Useful Help: BUILD
+_Useful Help_: BUILD
 
 ```
 build <buildingtype>
@@ -55,7 +57,7 @@ You heave a huge stone blcok into place.
 
 ### Creating Instances of Objects for Testing
 
-Useful Help: LOAD
+_Useful Help_: LOAD
 
 First find the object with:
 ```
@@ -115,7 +117,7 @@ The olc editor is a built in editor that lets you create or edit templates of ro
 
 ### Creating a New Building
 
-Useful helps: BUILDING, OLC
+_Useful Help_: BUILDING, OLC
 
 You always start by coping an existing building.
 
