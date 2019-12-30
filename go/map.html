@@ -1,0 +1,347 @@
+<html>
+<head>
+  <title>Tales From The Rim World Map</title>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <link rel="stylesheet" href="https://unpkg.com/purecss@1.0.1/build/pure-min.css" integrity="sha384-oAOxQR6DkCoMliIh8yFnu25d7Eq/PHS21PClpwjOTeU2jRSq11vu66rf90/cZr47" crossorigin="anonymous">
+  <style>
+
+  .img-magnifier-container {
+    position: relative;
+  }
+
+  .img-magnifier-glass {
+    transition: visibility 0s, opacity 0.1s linear;
+    position: absolute;
+    border: 3px solid #000;
+    border-radius: 50%;
+    cursor: crosshair;
+    overflow: auto;
+    /*Set the size of the magnifier glass:*/
+    width: 200px;
+    height: 200px;
+  }
+
+
+@import 'https://fonts.googleapis.com/css?family=Open+Sans';
+
+* {
+  -webkit-box-sizing: border-box;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Open Sans', sans-serif;
+  line-height: 1.75em;
+  margin: 10px;
+  font-size: 16px;
+  background-color: #222;
+  color: #aaa;
+}
+
+.simple-container {
+  max-width: 675px;
+  margin: 0 auto;
+  padding-top: 70px;
+  padding-bottom: 20px;
+}
+
+.simple-print {
+  fill: white;
+  stroke: white;
+}
+.simple-print svg {
+  height: 100%;
+}
+
+.simple-close {
+  color: white;
+  border-color: white;
+}
+
+.simple-ext-info {
+  border-top: 1px solid #aaa;
+}
+
+p {
+  font-size: 16px;
+}
+
+h1 {
+  font-size: 30px;
+  line-height: 34px;
+}
+
+h2 {
+  font-size: 20px;
+  line-height: 25px;
+}
+
+h3 {
+  font-size: 16px;
+  line-height: 27px;
+  padding-top: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #D8D8D8;
+  border-top: 1px solid #D8D8D8;
+}
+
+hr {
+  height: 1px;
+  background-color: #d8d8d8;
+  border: none;
+  width: 100%;
+  margin: 0px;
+}
+
+a[href] {
+  color: #1e8ad6;
+}
+
+a[href]:hover {
+  color: #3ba0e6;
+}
+
+li {
+  line-height: 1.5em;
+}
+
+aside,
+[class *= "sidebar"],
+[id *= "sidebar"] {
+  max-width: 90%;
+  margin: 0 auto;
+  border: 1px solid lightgrey;
+  padding: 5px 15px;
+}
+
+@media (min-width: 1921px) {
+  body {
+    font-size: 18px;
+  }
+}
+
+form {
+  margin: 40px 0;
+}
+
+
+label {
+  width: 200px;
+  border-radius: 3px;
+  border: 1px solid #D1D3D4
+}
+
+input.radio:empty {
+  margin-left: -999px;
+}
+
+input.radio:empty ~ label {
+  position: relative;
+  float: left;
+  line-height: 2.5em;
+  text-indent: 3.25em;
+  margin-top: 2em;
+  margin-right: 10px;
+  cursor: pointer;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+input.radio:empty ~ label:before {
+  position: absolute;
+  display: block;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  content: '';
+  width: 2.5em;
+  background: #D1D3D4;
+  border-radius: 3px 0 0 3px;
+}
+
+input.radio:hover:not(:checked) ~ label:before {
+  content:'\2714';
+  text-indent: .9em;
+  color: #C2C2C2;
+}
+
+input.radio:hover:not(:checked) ~ label {
+  color: #888;
+}
+
+input.radio:checked ~ label:before {
+  content:'\2714';
+  text-indent: .9em;
+  color: #9CE2AE;
+  background-color: #4DCB6D;
+}
+
+input.radio:checked ~ label {
+  color: #777;
+}
+
+input.radio:focus ~ label:before {
+  box-shadow: 0 0 0 3px #999;
+}
+
+table, th, td {
+  border: 0px;
+}
+td {
+  margin: 40px;
+}
+  </style>
+  <script>
+var pressed = 0;
+
+function magnify(imgID, zoom) {
+  var img, glass, w, h, bw;
+  img = document.getElementById(imgID);
+
+  /* Create magnifier glass: */
+  glass = document.createElement("DIV");
+  glass.id = 'glass';
+  glass.setAttribute("class", "img-magnifier-glass");
+
+  /* Insert magnifier glass: */
+  img.parentElement.insertBefore(glass, img);
+
+  /* Set background properties for the magnifier glass: */
+  glass.style.backgroundImage = "url('" + img.src + "')";
+  glass.style.backgroundRepeat = "no-repeat";
+  glass.style.backgroundSize = (img.width * zoom) + "px " + (img.height * zoom) + "px";
+  bw = 3;
+  w = glass.offsetWidth / 2;
+  h = glass.offsetHeight / 2;
+
+  /* Execute a function when someone moves the magnifier glass over the image: */
+  glass.addEventListener("mousemove", moveMagnifier);
+  img.addEventListener("mousemove", moveMagnifier);
+  img.addEventListener("onmousedown", mouseDown);
+  img.addEventListener("onmouseup", mouseUp);
+
+  /*and also for touch screens:*/
+  glass.addEventListener("touchmove", moveMagnifier);
+  img.addEventListener("touchmove", moveMagnifier);
+  function mouseDown(e) {
+    console.log('down');
+    ++pressed;
+  }
+  function mouseUp(e) {
+    --pressed;   
+  }
+  function moveMagnifier(e) {
+    var pos, x, y;
+    /* Prevent any other actions that may occur when moving over the image */
+    e.preventDefault();
+    /* Get the cursor's x and y positions: */
+    pos = getCursorPos(e);
+    x = pos.x;
+    y = pos.y;
+    /* Prevent the magnifier glass from being positioned outside the image: */
+    // if (x > img.width - (w / zoom)) {x = img.width - (w / zoom);}
+    // if (x < w / zoom) {x = w / zoom;}
+    // if (y > img.height - (h / zoom)) {y = img.height - (h / zoom);}
+    // if (y < h / zoom) {y = h / zoom;}
+    if (x > img.width - (w / zoom) || (x < w / zoom) || (y > img.height - (h / zoom)) || (y < h / zoom)) {
+      //glass.style.transition = 'visibility 0s, opacity 0.5s linear;';
+      //glass.style.display = 'none';
+      glass.style.opacity = 0;
+
+    } else {
+      //glass.style.display = 'block';
+      glass.style.opacity = 1;
+    }
+    /* Set the position of the magnifier glass: */
+    glass.style.left = (x - w) + "px";
+    glass.style.top = (y - h) + "px";
+    if(pressed){
+      loc = document.getElementById("loc");
+      loc.innerHTML = "(" + x + "," + y + ")";      
+    }
+    /* Display what the magnifier glass "sees": */
+    glass.style.backgroundPosition = "-" + ((x * zoom) - w + bw) + "px -" + ((y * zoom) - h + bw) + "px";
+  }
+
+  function getCursorPos(e) {
+    var a, x = 0, y = 0;
+    e = e || window.event;
+    /* Get the x and y positions of the image: */
+    a = img.getBoundingClientRect();
+    /* Calculate the cursor's x and y coordinates, relative to the image: */
+    x = e.pageX - a.left;
+    y = e.pageY - a.top;
+    /* Consider any page scrolling: */
+    x = x - window.pageXOffset;
+    y = y - window.pageYOffset;
+    return {x : x, y : y};
+  }
+}
+
+function reportLocation(e) {
+    var a, x = 0, y = 0;
+    e = e || window.event;
+    var img = document.getElementById("myimage");
+    /* Get the x and y positions of the image: */
+    a = img.getBoundingClientRect();
+    /* Calculate the cursor's x and y coordinates, relative to the image: */
+    x = e.pageX - a.left;
+    y = e.pageY - a.top;
+    /* Consider any page scrolling: */
+    x = x - window.pageXOffset;
+    y = y - window.pageYOffset;
+    loc = document.getElementById("loc");
+    loc.value = "goto (" + Math.round(x) + "," + Math.round(1000 - y) + ")";  
+    loc.select();
+    loc.setSelectionRange(0, 99999); /*For mobile devices*/
+
+    document.execCommand("copy");
+}
+
+function showMap() {
+  document.getElementById('myimage').src = "map.png";
+  document.getElementById('glass').style.backgroundImage = "url('map.png')";
+}
+
+function showTerrain() {
+  document.getElementById('myimage').src = "map-terrain.png";
+  document.getElementById('glass').style.backgroundImage = "url('map-terrain.png')";
+}
+
+function showPolitical() {
+  document.getElementById('myimage').src = "map-political.png";
+  document.getElementById('glass').style.backgroundImage = "url('map-political.png')";
+}
+
+</script>
+
+</head>
+<body>
+  <table style="width: 1800"><tr><td style="margin-left: 10px"><h1>Tales From The Rim Map</h1></td>
+  <td style="margin: 20px"><b>Selected Location: <input id="loc" /></b></td></tr></table>
+  <div style="clear: both;" onmousedown="reportLocation()" class="img-magnifier-container">
+    <img id="myimage" src="map.png" width="1800" height="1000" alt="World Map">
+  </div>
+<div>
+<span>
+<input type="radio" name="radio" id="radio1" class="radio" onclick="showMap();" checked/>
+<label for="radio1">Standard Map</label>
+</span> <span>
+<input type="radio" name="radio" id="radio2" class="radio" onclick="showTerrain();"/>
+<label for="radio2">Terrain Only</label>
+</span> <span> 
+<input type="radio" name="radio" id="radio3" class="radio" onclick="showPolitical();"/>
+<label for="radio3">Cities Only</label>
+</span>  
+</div>  <div style="margin-top: 10px"><a href="http://mudding.online:4999">Connect now Via the Web</a> Or Telnet to mudding.online port 5000</div>
+  <script>
+  /* Execute the magnify function: */
+  magnify("myimage", 5);
+  /* Specify the id of the image, and the strength of the magnifier glass: */
+  </script>
+</body>
+</html>
