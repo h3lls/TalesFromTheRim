@@ -1213,8 +1213,11 @@ void perform_idle_out(char_data *ch) {
 		return;
 	}
 
-	// DISABLE IDLE OUT
-	return;
+
+	// if use_noidle is not set disable timeout
+	if (!config_get_bool("use_noidle")) {
+		return;
+	}
 	
 	// block idle-out entirely with this prf
 	if (ch->desc && PRF_FLAGGED(ch, PRF_NO_IDLE_OUT)) {

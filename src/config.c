@@ -168,9 +168,8 @@ struct tedit_struct tedit_option[] = {
 // shown to newbies
 const char *START_MESSG =
 "\r\n"
-"&YWelcome. This is your new EmpireMUD character! You can now earn wealth,\r\n"
-"acquire territory, harvest grain, and command an empire! Try the INFO\r\n"
-"and HELP commands to get started.&0\r\n";
+"&YWelcome.You can now earn wealth, acquire territory, harvest grain, and\r\n"
+"command an empire! Try the INFO and HELP commands to get started.&0\r\n";
 
 
  //////////////////////////////////////////////////////////////////////////////
@@ -1615,6 +1614,9 @@ void init_config_system(void) {
     init_config(CONFIG_GAME, "no_person", CONFTYPE_SHORT_STRING, "bad target error for no person");
     init_config(CONFIG_GAME, "huh_string", CONFTYPE_SHORT_STRING, "message for invalid command");
     init_config(CONFIG_GAME, "public_logins", CONFTYPE_BOOL, "login/out/alt display to mortlog instead of elog");
+    init_config(CONFIG_GAME, "use_noidle", CONFTYPE_BOOL, "Enable idle timeouts server wide");
+    init_config(CONFIG_GAME, "use_multi_ip", CONFTYPE_BOOL, "Enable multi-ip checking server wide");
+    init_config(CONFIG_GAME, "use_multi_char", CONFTYPE_BOOL, "Enable multi-char checking server wide");
 
     // actions
     init_config(CONFIG_ACTIONS, "chore_distance", CONFTYPE_INT, "tiles away from home a citizen will work");

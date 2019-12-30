@@ -1917,8 +1917,12 @@ void start_creation_process(descriptor_data *d) {
 bool check_multiplaying(descriptor_data *d) {
 	descriptor_data *c, *next_c;
 	bool ok = TRUE;
-	
-	return TRUE;
+
+	/* Check to see if use_multi_char is enabled and return if so */
+	if (!config_get_bool("use_multi_char")) {
+		return TRUE;
+	}
+
 	if (ACCOUNT_FLAGGED(d->character, ACCT_MULTI_CHAR)) {
 		return TRUE;
 	}
@@ -1939,7 +1943,13 @@ bool check_multiplaying(descriptor_data *d) {
 		}
 		else if (!ACCOUNT_FLAGGED(d->character, ACCT_MULTI_IP | ACCT_MULTI_CHAR) && !ACCOUNT_FLAGGED(c->character, ACCT_MULTI_IP | ACCT_MULTI_CHAR) && !PLR_FLAGGED(d->character, PLR_IPMASK) && !strcmp(c->host, d->host)) {
 			// IP is already logged in: just decline the connection
-			ok = FALSE;
+
+			/* Check to see if use_multi_char is enabled and return if so */
+			if (!config_get_bool("use_multi_ip")) {
+				ok = TRUE;
+			} else {
+				ok = FALSE;
+			}
 		}
 	}
 	
