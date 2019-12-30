@@ -797,7 +797,7 @@ if eval "test \"`echo '$''{'ac_cv_char_warn'+set}'`\" = set"; then
 else
   
     OLDCFLAGS=$CFLAGS
-    CFLAGS="$CFLAGS -Wall -Werror"
+    CFLAGS="$CFLAGS -Wall -Werror -Wformat=0 -Wunused-result"
     cat > conftest.$ac_ext <<EOF
 #line 804 "configure"
 #include "confdefs.h"
@@ -863,7 +863,7 @@ echo "$ac_t""$ac_cv_gcc_ncs" 1>&6
     MYFLAGS="-Wall"
   else
     if test ${ac_cv_gcc_ncs:-ERROR} = yes; then
-      MYFLAGS="-Wall -Wno-char-subscripts"
+      MYFLAGS="-Wall -Wno-char-subscripts -Wformat=0 -Wno-unused-result"
     else
       MYFLAGS=""
     fi
