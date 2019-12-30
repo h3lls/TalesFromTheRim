@@ -476,6 +476,8 @@ static void start_digging(char_data *ch) {
 
 		send_to_char("You begin to dig into the ground.\r\n", ch);
 		act("$n kneels down and begins to dig.", TRUE, ch, 0, 0, TO_ROOM);
+	} else {
+		send_to_char("You can't dig here.\r\n", ch);
 	}
 }
 
