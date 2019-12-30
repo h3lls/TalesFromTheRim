@@ -7,7 +7,7 @@
 CC = gcc
 
 # Any special flags you want to pass to the compiler
-MYFLAGS = -Wall -Wno-char-subscripts -DEMPIRE_UTIL
+MYFLAGS = -Wall -Wno-char-subscripts -Wformat=0 -Wno-unused-result -DEMPIRE_UTIL
 
 #flags for profiling (see hacker.doc for more information)
 PROFILE = 
