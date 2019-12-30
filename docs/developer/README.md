@@ -11,6 +11,20 @@ You will need a few tools to clone and build the project.
 
 With git you should also setup an ssh key and add it to github.com https://github.com/settings/keys to get more details you can view https://help.github.com/articles/generating-an-ssh-key/ This will allow you to avoid having to enter username and password over and over again and also is quite a bit more secure.
 
+## Updating Documentation
+
+To test locally, install docsify:
+```
+npm i docsify-cli -g
+```
+
+Then run from the docs dir:
+```
+docsify serve
+```
+
+Alternately, you can just push to master build changes and they will be reflected in pages on github.
+
 ## Docker Build
 
 Docker allows you to run the mud locally without having to install gcc or the other myriad of tools needed. This lets you create a local environment without the heavy lifting of installing every tool.
