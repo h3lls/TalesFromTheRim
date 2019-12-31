@@ -90,7 +90,7 @@ def telnet(client):
                         data = data.strip()
                         user = data.split('[0m ')[1].split(']')[0]
                         if user.lower() != mud_username.lower():
-                            send_text = "**" + user + "**: " + data[data.find(':')+2:-6]
+                            send_text = "**" + user + "**: " + data[data.find(':')+2:].split('\n')[0]
                             print("sending to discord: " + send_text)
                             message_queue.put_nowait(send_text)
                     if "(OOC)" in data:
@@ -149,12 +149,14 @@ async def on_ready():
             f'{guild.name}(id: {guild.id})'
         )
     while True:
-        asyncio.sleep(1)
-        message = await message_queue.get()
+        await asyncio.sleep(1)
         try:
-            await channel.send(message)
-        except:
-            print("error")
+            message = message_queue.get_nowait()
+        except asyncio.QueueEmpty:
+            continue
+
+        print(f"Sending message to Discord: '{message}'")
+        await channel.send(message)
 
 x = threading.Thread(target=telnet, args=(client,))
 x.start()
