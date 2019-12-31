@@ -29,11 +29,13 @@ LIBS = -lcrypt -lm
 
 default: all
 
-all: $(BINDIR)/cryptpasswd $(WLDDIR)/map $(BINDIR)/sign \
+all: $(BINDIR)/cryptpasswd $(BINDIR)/evolve $(WLDDIR)/map $(BINDIR)/sign \
 	$(BINDIR)/plrconv-20b1-to-20b2 $(BINDIR)/plrconv-20b2-to-20b3 \
 	$(BINDIR)/plrconv-20b3-to-ascii
 
 cryptpasswd: $(BINDIR)/cryptpasswd
+
+evolve: $(BINDIR)/evolve
 
 map: $(WLDDIR)/map
 
@@ -48,6 +50,10 @@ sign: $(BINDIR)/sign
 $(BINDIR)/cryptpasswd: cryptpasswd.c $(INCDIR)/conf.h $(INCDIR)/sysdep.h \
 	$(INCDIR)/structs.h $(INCDIR)/utils.h
 	$(CC) $(CFLAGS) -o $(BINDIR)/cryptpasswd cryptpasswd.c $(LIBS)
+
+$(BINDIR)/evolve: evolve.c $(INCDIR)/conf.h $(INCDIR)/sysdep.h \
+	$(INCDIR)/structs.h $(INCDIR)/utils.h $(INCDIR)/db.h
+	$(CC) $(CFLAGS) -o $(BINDIR)/evolve evolve.c $(LIBS)
 
 $(WLDDIR)/map: map.c $(INCDIR)/conf.h $(INCDIR)/sysdep.h $(INCDIR)/structs.h
 	$(CC) $(CFLAGS) -o $(WLDDIR)/map map.c $(LIBS)

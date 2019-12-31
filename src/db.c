@@ -48,7 +48,9 @@
 extern const sector_vnum climate_default_sector[NUM_CLIMATES];
 
 // external functions
+void check_delayed_load(char_data *ch);
 void Crash_save_one_obj_to_file(FILE *fl, obj_data *obj, int location);
+void delete_instance(struct instance_data *inst, bool run_cleanup);	// instance.c
 void discrete_load(FILE *fl, int mode, char *filename);
 void free_complex_data(struct complex_room_data *data);
 extern crop_data *get_potential_crop_for_location(room_data *location);
@@ -82,6 +84,10 @@ archetype_data *sorted_archetypes = NULL;	// sorted hash (sorted_hh)
 augment_data *augment_table = NULL;	// master augment hash table
 augment_data *sorted_augments = NULL;	// alphabetic version // sorted_hh
 
+// automessage system
+struct automessage *automessages = NULL;	// hash table (hh, by id)
+int max_automessage_id = 0;	// read from file, permanent max id
+
 // buildings
 bld_data *building_table = NULL;	// building hash table
 
@@ -100,6 +106,13 @@ crop_data *crop_table = NULL;	// crop hash table
 empire_data *empire_table = NULL;	// hash table of empires
 double empire_score_average[NUM_SCORES];
 struct trading_post_data *trading_list = NULL;	// global LL of trading post stuff
+bool check_delayed_refresh = FALSE;	// triggers multiple refreshes
+
+// events
+event_data *event_table = NULL;	// global hash table (hh)
+int top_event_id = 0;	// highest unique id used
+struct event_running_data *running_events = NULL;	// list of active events
+bool events_need_save = FALSE;	// triggers a save on running_events
 
 // factions
 faction_data *faction_table = NULL;	// main hash (hh)
@@ -119,6 +132,10 @@ struct weather_data weather_info;	// the infomation about the weather
 int wizlock_level = 0;	// level of game restriction
 char *wizlock_message = NULL;	// Message sent to people trying to connect
 
+// generics
+generic_data *generic_table = NULL;	// hash table (hh)
+generic_data *sorted_generics = NULL;	// hash table (sorted_hh)
+
 // global stuff
 struct global_data *globals_table = NULL;	// hash table of global_data
 
@@ -128,7 +145,7 @@ int top_of_helpt = 0;	// top of help index table
 
 // map
 room_vnum *start_locs = NULL;	// array of start locations
-int num_of_start_locs = -1;	// maximum start locations
+int highest_start_loc_index = -1;	// maximum start locations
 int top_island_num = -1;	// for number of islands
 
 // mobs
@@ -154,6 +171,13 @@ player_index_data *player_table_by_name = NULL;	// hash table by name
 int top_idnum = 0;	// highest idnum in use
 int top_account_id = 0;  // highest account number in use, determined during startup
 struct group_data *group_list = NULL;	// global LL of groups
+bool pause_affect_total = FALSE;	// helps prevent unnecessary calls to affect_total
+int max_inventory_size = 25;	// records how high inventories go right now (for script safety)
+
+// progress
+progress_data *progress_table = NULL;	// hashed by vnum, sorted by vnum
+progress_data *sorted_progress = NULL;	// hashed by vnum, sorted by type/data
+bool need_progress_refresh = FALSE;	// triggers an update of all empires' trackers
 
 // quests
 struct quest_data *quest_table = NULL;
@@ -164,9 +188,9 @@ room_template *room_template_table = NULL;	// hash table of room templates
 // sectors
 sector_data *sector_table = NULL;	// sector hash table
 struct sector_index_type *sector_index = NULL;	// index lists
-struct map_data *last_evo_tile = NULL;	// for resuming map evolutions
-sector_data *last_evo_sect = NULL;	// for resuming map evolutions
-int evos_per_hour = 1;	// how many map tiles evolve per hour (for load-balancing)
+
+// shops
+shop_data *shop_table = NULL;	// hash table of shops (hh)
 
 // skills
 skill_data *skill_table = NULL;	// main skills hash (hh)
@@ -189,6 +213,7 @@ char *wizlist = NULL;	// list of higher gods
 char *godlist = NULL;	// list of peon gods
 char *handbook = NULL;	// handbook for new immortals
 char *policies = NULL;	// policies page
+char *news = NULL;	// news for players
 
 // tips of the day system
 char **tips_of_the_day = NULL;	// array of tips
@@ -198,6 +223,7 @@ int tips_of_the_day_size = 0;	// size of tip array
 trig_data *trigger_table = NULL;	// trigger prototype hash
 trig_data *trigger_list = NULL;	// LL of all attached triggers
 trig_data *random_triggers = NULL;	// DLL of live random triggers (next_in_random_triggers, prev_in_random_triggers)
+trig_data *free_trigger_list = NULL;	// LL of triggers to free (next_to_free)
 int max_mob_id = MOB_ID_BASE;	// for unique mob ids
 int max_obj_id = OBJ_ID_BASE;	// for unique obj ids
 int max_vehicle_id = VEHICLE_ID_BASE;	// for unique vehicle ids
@@ -219,36 +245,43 @@ bool need_world_index = TRUE;	// used to trigger world index saving (always save
 struct island_info *island_table = NULL; // hash table for all the islands
 struct map_data world_map[MAP_WIDTH][MAP_HEIGHT];	// master world map
 struct map_data *land_map = NULL;	// linked list of non-ocean
+int size_of_world = 1;	// used by the instancer to adjust instance counts
+struct shared_room_data ocean_shared_data;	// for BASIC_OCEAN tiles
 bool world_map_needs_save = TRUE;	// always do at least 1 save
 
 
 // DB_BOOT_x
 struct db_boot_info_type db_boot_info[NUM_DB_BOOT_TYPES] = {
-	{ WLD_PREFIX, WLD_SUFFIX },	// DB_BOOT_WLD
-	{ MOB_PREFIX, MOB_SUFFIX },	// DB_BOOT_MOB
-	{ OBJ_PREFIX, OBJ_SUFFIX },	// DB_BOOT_OBJ
-	{ NAMES_PREFIX, NULL },	// DB_BOOT_NAMES
-	{ LIB_EMPIRE, EMPIRE_SUFFIX },	// DB_BOOT_EMP
-	{ BOOK_PREFIX, BOOK_SUFFIX },	// DB_BOOT_BOOKS
-	{ CRAFT_PREFIX, CRAFT_SUFFIX },	// DB_BOOT_CRAFT
-	{ BLD_PREFIX, BLD_SUFFIX },	// DB_BOOT_BLD
-	{ TRG_PREFIX, TRG_SUFFIX },	// DB_BOOT_TRG
-	{ CROP_PREFIX, CROP_SUFFIX },	// DB_BOOT_CROP
-	{ SECTOR_PREFIX, SECTOR_SUFFIX },	// DB_BOOT_SECTOR
-	{ ADV_PREFIX, ADV_SUFFIX },	// DB_BOOT_ADV
-	{ RMT_PREFIX, RMT_SUFFIX },	// DB_BOOT_RMT
-	{ GLB_PREFIX, GLB_SUFFIX },	// DB_BOOT_GLB
-	{ ACCT_PREFIX, ACCT_SUFFIX },	// DB_BOOT_ACCT
-	{ AUG_PREFIX, AUG_SUFFIX },	// DB_BOOT_AUG
-	{ ARCH_PREFIX, ARCH_SUFFIX },	// DB_BOOT_ARCH
-	{ ABIL_PREFIX, ABIL_SUFFIX },	// DB_BOOT_ABIL
-	{ CLASS_PREFIX, CLASS_SUFFIX },	// DB_BOOT_CLASS
-	{ SKILL_PREFIX, SKILL_SUFFIX },	// DB_BOOT_SKILL
-	{ VEH_PREFIX, VEH_SUFFIX },	// DB_BOOT_SKILL
-	{ MORPH_PREFIX, MORPH_SUFFIX },	// DB_BOOT_MORPH
-	{ QST_PREFIX, QST_SUFFIX },	// DB_BOOT_QST
-	{ SOC_PREFIX, SOC_SUFFIX },	// DB_BOOT_SOC
-	{ FCT_PREFIX, FCT_SUFFIX },	// DB_BOOT_FCT
+	// prefix, suffix, allow-zero-of-it
+	{ WLD_PREFIX, WLD_SUFFIX, TRUE },	// DB_BOOT_WLD
+	{ MOB_PREFIX, MOB_SUFFIX, FALSE },	// DB_BOOT_MOB
+	{ OBJ_PREFIX, OBJ_SUFFIX, FALSE },	// DB_BOOT_OBJ
+	{ NAMES_PREFIX, NULL, FALSE },	// DB_BOOT_NAMES
+	{ LIB_EMPIRE, EMPIRE_SUFFIX, TRUE },	// DB_BOOT_EMP
+	{ BOOK_PREFIX, BOOK_SUFFIX, TRUE },	// DB_BOOT_BOOKS
+	{ CRAFT_PREFIX, CRAFT_SUFFIX, TRUE },	// DB_BOOT_CRAFT
+	{ BLD_PREFIX, BLD_SUFFIX, TRUE },	// DB_BOOT_BLD
+	{ TRG_PREFIX, TRG_SUFFIX, TRUE },	// DB_BOOT_TRG
+	{ CROP_PREFIX, CROP_SUFFIX, FALSE },	// DB_BOOT_CROP
+	{ SECTOR_PREFIX, SECTOR_SUFFIX, FALSE },	// DB_BOOT_SECTOR
+	{ ADV_PREFIX, ADV_SUFFIX, TRUE },	// DB_BOOT_ADV
+	{ RMT_PREFIX, RMT_SUFFIX, TRUE },	// DB_BOOT_RMT
+	{ GLB_PREFIX, GLB_SUFFIX, TRUE },	// DB_BOOT_GLB
+	{ ACCT_PREFIX, ACCT_SUFFIX, TRUE },	// DB_BOOT_ACCT
+	{ AUG_PREFIX, AUG_SUFFIX, TRUE },	// DB_BOOT_AUG
+	{ ARCH_PREFIX, ARCH_SUFFIX, TRUE },	// DB_BOOT_ARCH
+	{ ABIL_PREFIX, ABIL_SUFFIX, TRUE },	// DB_BOOT_ABIL
+	{ CLASS_PREFIX, CLASS_SUFFIX, TRUE },	// DB_BOOT_CLASS
+	{ SKILL_PREFIX, SKILL_SUFFIX, TRUE },	// DB_BOOT_SKILL
+	{ VEH_PREFIX, VEH_SUFFIX, TRUE },	// DB_BOOT_SKILL
+	{ MORPH_PREFIX, MORPH_SUFFIX, TRUE },	// DB_BOOT_MORPH
+	{ QST_PREFIX, QST_SUFFIX, TRUE },	// DB_BOOT_QST
+	{ SOC_PREFIX, SOC_SUFFIX, TRUE },	// DB_BOOT_SOC
+	{ FCT_PREFIX, FCT_SUFFIX, TRUE },	// DB_BOOT_FCT
+	{ GEN_PREFIX, GEN_SUFFIX, TRUE },	// DB_BOOT_GEN
+	{ SHOP_PREFIX, SHOP_SUFFIX, TRUE },	// DB_BOOT_SHOP
+	{ PRG_PREFIX, PRG_SUFFIX, TRUE },	// DB_BOOT_PRG
+	{ EVT_PREFIX, EVT_SUFFIX, TRUE },	// DB_BOOT_EVT
 };
 
 
@@ -261,16 +294,23 @@ struct db_boot_info_type db_boot_info[NUM_DB_BOOT_TYPES] = {
 */
 void boot_db(void) {
 	void Read_Invalid_List();
+	void abandon_lost_vehicles();
 	void boot_world();
 	void build_all_quest_lookups();
+	void build_all_shop_lookups();
 	void build_player_index();
+	void check_for_new_map();
+	void check_learned_empire_crafts();
+	void check_nowhere_einv_all();
 	void check_ruined_cities();
 	void check_version();
 	void delete_old_players();
 	void delete_orphaned_rooms();
-	void detect_evos_per_hour();
+	void expire_old_politics();
+	void generate_island_descriptions();
 	void init_config_system();
 	void link_and_check_vehicles();
+	void load_automessages();
 	void load_banned();
 	void load_data_table();
 	void load_intro_screens();
@@ -279,8 +319,12 @@ void boot_db(void) {
 	void load_trading_post();
 	int run_convert_vehicle_list();
 	void run_reboot_triggers();
+	void schedule_map_unloads();
+	void setup_island_levels();
 	void sort_commands();
 	void startup_room_reset();
+	void update_instance_world_size();
+	void verify_empire_goals();
 	void verify_sectors();
 
 	log("Boot db -- BEGIN.");
@@ -305,10 +349,14 @@ void boot_db(void) {
 	file_to_string_alloc(POLICIES_FILE, &policies);
 	file_to_string_alloc(HANDBOOK_FILE, &handbook);
 	file_to_string_alloc(SCREDITS_FILE, &CREDIT_MESSG);
+	file_to_string_alloc(NEWS_FILE, &news);
 	load_intro_screens();
 
 	// Load the world!
 	boot_world();
+	
+	log("Loading automessages.");
+	load_automessages();
 
 	log("Loading help entries.");
 	index_boot_help();
@@ -318,9 +366,6 @@ void boot_db(void) {
 
 	log("Generating player index.");
 	build_player_index();
-	
-	log(" Checking for ruined cities...");
-	check_ruined_cities();
 
 	log("Loading fight messages.");
 	load_fight_messages();
@@ -370,15 +415,35 @@ void boot_db(void) {
 	log("Building quest lookup hints.");
 	build_all_quest_lookups();
 	
-	// figure out how often to evolve what (do this late)
-	detect_evos_per_hour();
+	log("Building shop lookup hints.");
+	build_all_shop_lookups();
+	
+	log("Updating island descriptions.");
+	generate_island_descriptions();
 	
 	// final things...
 	log("Running reboot triggers.");
 	run_reboot_triggers();
 	
-	log(" Calculating territory and members.");
+	log(" Calculating empire data.");
 	reread_empire_tech(NULL);
+	check_for_new_map();
+	setup_island_levels();
+	expire_old_politics();
+	check_learned_empire_crafts();
+	check_nowhere_einv_all();
+	verify_empire_goals();
+	need_progress_refresh = TRUE;
+	
+	log(" Checking for ruined cities...");
+	check_ruined_cities();
+	
+	log(" Abandoning lost vehicles...");
+	abandon_lost_vehicles();
+	
+	log("Managing world memory.");
+	schedule_map_unloads();
+	update_instance_world_size();
 	
 	// END
 	log("Boot db -- DONE.");
@@ -410,11 +475,13 @@ void boot_world(void) {
 	void load_empire_storage();
 	void load_instances();
 	void load_islands();
+	void load_running_events_file();
 	void load_world_map_from_file();
 	void number_and_count_islands(bool reset);
 	void read_ability_requirements();
 	void renum_world();
 	void setup_start_locations();
+	void verify_running_events();
 	extern int sort_abilities_by_data(ability_data *a, ability_data *b);
 	extern int sort_archetypes_by_data(archetype_data *a, archetype_data *b);
 	extern int sort_augments_by_data(augment_data *a, augment_data *b);
@@ -424,6 +491,9 @@ void boot_world(void) {
 	extern int sort_socials_by_data(social_data *a, social_data *b);
 
 	// DB_BOOT_x search: boot new types in this function
+	
+	log("Loading generics.");
+	index_boot(DB_BOOT_GEN);
 	
 	log("Loading abilities.");
 	index_boot(DB_BOOT_ABIL);
@@ -469,7 +539,7 @@ void boot_world(void) {
 	// requires rooms
 	log("Loading empires.");
 	index_boot(DB_BOOT_EMP);
-	clean_empire_logs();
+	clean_empire_offenses();
 	
 	// requires empires
 	log("  Renumbering rooms.");
@@ -494,6 +564,9 @@ void boot_world(void) {
 	log("Loading craft recipes.");
 	index_boot(DB_BOOT_CRAFT);
 	
+	log("Loading shops.");
+	index_boot(DB_BOOT_SHOP);
+	
 	log("Loading quests.");
 	index_boot(DB_BOOT_QST);
 	
@@ -512,17 +585,27 @@ void boot_world(void) {
 	log("Loading morphs.");
 	index_boot(DB_BOOT_MORPH);
 	
+	log("Loading empire progression.");
+	index_boot(DB_BOOT_PRG);
+	
+	log("Loading events.");
+	index_boot(DB_BOOT_EVT);
+	
 	log("Loading socials.");
 	index_boot(DB_BOOT_SOC);
 	
 	log("Loading instances.");
 	load_instances();
 	
-	log("Loading empire storage.");
+	log("Loading empire storage and logs.");
 	load_empire_storage();
+	clean_empire_logs();
 	
 	log("Loading daily quest cycles.");
 	load_daily_quest_file();
+	
+	log("Loading active events.");
+	load_running_events_file();
 	
 	// check for bad data
 	log("Verifying data.");
@@ -533,6 +616,7 @@ void boot_world(void) {
 	check_skills();
 	check_for_bad_buildings();
 	check_for_bad_sectors();
+	verify_running_events();
 	read_ability_requirements();
 	check_triggers();
 	
@@ -624,10 +708,12 @@ void add_trd_owner(room_vnum vnum, empire_vnum owner) {
 * startup and should also be called any time a building is deleted.
 */
 void check_for_bad_buildings(void) {
-	extern struct instance_data *find_instance_by_room(room_data *room, bool check_homeroom);
-	void unlink_instance_entrance(room_data *room);
+	extern struct instance_data *find_instance_by_room(room_data *room, bool check_homeroom, bool allow_fake_loc);
+	void unlink_instance_entrance(room_data *room, bool run_cleanup);
+	extern const char *bld_relationship_types[];
 
 	struct obj_storage_type *store, *next_store, *temp;
+	struct bld_relation *relat, *next_relat;
 	bld_data *bld, *next_bld;
 	room_data *room, *next_room;
 	craft_data *craft, *next_craft;
@@ -659,10 +745,10 @@ void check_for_bad_buildings(void) {
 			delete_room(room, FALSE);	// must check_all_exits
 			deleted = TRUE;
 		}
-		else if (ROOM_AFF_FLAGGED(room, ROOM_AFF_HAS_INSTANCE) && !find_instance_by_room(room, TRUE)) {
+		else if (ROOM_AFF_FLAGGED(room, ROOM_AFF_HAS_INSTANCE) && !find_instance_by_room(room, TRUE, FALSE)) {
 			// room is marked as an instance entrance, but no instance is associated with it
 			log(" unlinking instance entrance room %d for no association with an instance", GET_ROOM_VNUM(room));
-			unlink_instance_entrance(room);
+			unlink_instance_entrance(room, FALSE);
 		}
 		/* This probably isn't necessary and having it here will cause roads to be pulled up as of b3.17 -paul
 		else if (COMPLEX_DATA(room) && !GET_BUILDING(room) && !GET_ROOM_TEMPLATE(room)) {
@@ -725,12 +811,15 @@ void check_for_bad_buildings(void) {
 		}
 	}
 	
-	// check buildings for upgrades: unset
+	// check buildings for bad relations: unset
 	HASH_ITER(hh, building_table, bld, next_bld) {
-		if (GET_BLD_UPGRADES_TO(bld) != NOTHING && !building_proto(GET_BLD_UPGRADES_TO(bld))) {
-			GET_BLD_UPGRADES_TO(bld) = NOTHING;
-			log(" removing upgrade for building %d for bad building type", GET_BLD_VNUM(bld));
-			save_library_file_for_vnum(DB_BOOT_BLD, GET_BLD_VNUM(bld));
+		LL_FOREACH_SAFE(GET_BLD_RELATIONS(bld), relat, next_relat) {
+			if (relat->vnum == NOTHING || !building_proto(relat->vnum)) {
+				log(" removing %s relationship for building %d for bad building type", bld_relationship_types[relat->type], GET_BLD_VNUM(bld));
+				LL_DELETE(GET_BLD_RELATIONS(bld), relat);
+				free(relat);
+				save_library_file_for_vnum(DB_BOOT_BLD, GET_BLD_VNUM(bld));
+			}
 		}
 	}
 }
@@ -802,7 +891,9 @@ void delete_orphaned_rooms(void) {
 */
 void verify_sectors(void) {	
 	sector_data *use_sect, *sect, *next_sect;
-	room_data *room, *next_room;
+	struct map_data *map, *next_map;
+	crop_data *new_crop;
+	room_data *room;
 	
 	// ensure we have a backup sect
 	use_sect = sector_proto(climate_default_sector[CLIMATE_TEMPERATE]);
@@ -821,18 +912,26 @@ void verify_sectors(void) {
 	}
 	
 	// check whole world
-	HASH_ITER(hh, world_table, room, next_room) {
-		if (!SECT(room)) {
+	LL_FOREACH_SAFE(land_map, map, next_map) {
+		room = real_real_room(map->vnum);
+		
+		if (!map->sector_type) {
 			// can't use change_terrain() here
-			perform_change_sect(room, NULL, use_sect);
+			perform_change_sect(NULL, map, use_sect);
 		}
-		if (!BASE_SECT(room)) {
+		if (!map->base_sector) {
+			if (!room) {
+				room = real_room(map->vnum);	// load it into memory
+			}
 			change_base_sector(room, use_sect);
 		}
 		
 		// also check for missing crop data
-		if (SECT_FLAGGED(SECT(room), SECTF_HAS_CROP_DATA | SECTF_CROP) && !ROOM_CROP(room)) {
-			crop_data *new_crop = get_potential_crop_for_location(room);
+		if (SECT_FLAGGED(map->sector_type, SECTF_HAS_CROP_DATA | SECTF_CROP) && !map->crop_type) {
+			if (!room) {
+				room = real_room(map->vnum);	// load it into memory
+			}
+			new_crop = get_potential_crop_for_location(room);
 			if (new_crop) {
 				set_crop_type(room, new_crop);
 			}
@@ -869,17 +968,36 @@ void process_temporary_room_data(void) {
 }
 
 
-/* resolve all vnums in the world */
+/**
+* resolve all vnums in the world and schedules some events that can't be
+* scheduled until this point.
+*/
 void renum_world(void) {
+	void check_tavern_setup(room_data *room);
+	void schedule_burn_down(room_data *room);
+	void schedule_crop_growth(struct map_data *map);
+	void schedule_room_affect_expire(room_data *room, struct affected_type *af);
+	void schedule_trench_fill(struct map_data *map);
+	
 	room_data *room, *next_room, *home;
 	struct room_direction_data *ex, *next_ex, *temp;
+	struct affected_type *af;
+	struct map_data *map;
 	
 	process_temporary_room_data();
-
-	// exits
+	
 	HASH_ITER(hh, world_table, room, next_room) {
-		// exits
+		// affects
+		LL_FOREACH(ROOM_AFFECTS(room), af) {
+			schedule_room_affect_expire(room, af);
+		}
+		
 		if (COMPLEX_DATA(room)) {
+			// events
+			if (COMPLEX_DATA(room)->burn_down_time > 0 && !find_stored_event_room(room, SEV_BURN_DOWN)) {
+				schedule_burn_down(room);
+			}
+			
 			// exit targets
 			for (ex = COMPLEX_DATA(room)->exits; ex; ex = next_ex) {
 				next_ex = ex->next;
@@ -906,7 +1024,27 @@ void renum_world(void) {
 				if (GET_ROOM_VEHICLE(home)) {
 					++VEH_INSIDE_ROOMS(GET_ROOM_VEHICLE(home));
 				}
+				
+				GET_ISLAND_ID(room) = GET_ISLAND_ID(home);
+				GET_ISLAND(room) = GET_ISLAND(home);
+				GET_MAP_LOC(room) = GET_MAP_LOC(home);
 			}
+		}
+		
+		// other room setup
+		check_tavern_setup(room);
+		
+		// ensure affects
+		affect_total_room(room);
+	}
+	
+	// schedule map events
+	LL_FOREACH(land_map, map) {
+		if (get_extra_data(map->shared->extra_data, ROOM_EXTRA_TRENCH_FILL_TIME) > 0) {
+			schedule_trench_fill(map);
+		}
+		if (get_extra_data(map->shared->extra_data, ROOM_EXTRA_SEED_TIME)) {
+			schedule_crop_growth(map);
 		}
 	}
 }
@@ -1080,7 +1218,7 @@ char *fread_string(FILE * fl, char *error) {
 
 		if (length + templength >= MAX_STRING_LENGTH) {
 			log("SYSERR: fread_string: string too large (db.c)");
-			log(error);
+			log("%s", error);
 			exit(1);
 		}
 		else {
@@ -1209,7 +1347,7 @@ void index_boot_help(void) {
 	sprintf(buf2, "%s%s", prefix, index_filename);
 
 	if (!(index = fopen(buf2, "r"))) {
-		log("SYSERR: opening index file '%s': %s", buf2, strerror(errno));
+		log("SYSERR: boot help opening index file '%s': %s", buf2, strerror(errno));
 		exit(1);
 	}
 
@@ -1311,7 +1449,7 @@ void push_island(struct map_data *loc) {
 void check_newbie_islands(void) {
 	struct island_info *isle = NULL, *ii, *next_ii;
 	room_data *room, *next_room;
-	int num_newbie_isles, last_isle = -1;
+	int num_newbie_isles;
 	empire_data *emp;
 	empire_vnum vnum;
 	
@@ -1332,18 +1470,13 @@ void check_newbie_islands(void) {
 	}
 	
 	HASH_ITER(hh, world_table, room, next_room) {
-		if (GET_ROOM_VNUM(room) >= MAP_SIZE || GET_ISLAND_ID(room) == NO_ISLAND) {
+		if (GET_ROOM_VNUM(room) >= MAP_SIZE || !(isle = GET_ISLAND(room))) {
 			continue;
 		}
 		
 		// ensure ownership and that the empire is "not new"
 		if (!(emp = ROOM_OWNER(room)) || (EMPIRE_CREATE_TIME(emp) + (config_get_int("newbie_island_day_limit") * SECS_PER_REAL_DAY)) > time(0)) {
 			continue;
-		}
-		
-		// usually see many of the same island in a row, so this reduces lookups
-		if (last_isle == -1 || GET_ISLAND_ID(room) != last_isle) {
-			isle = get_island(GET_ISLAND_ID(room), TRUE);
 		}
 		
 		// apply newbie rules?
@@ -1385,14 +1518,9 @@ void check_newbie_islands(void) {
 void number_island(struct map_data *map, int island) {
 	int x, y, new_x, new_y;
 	struct map_data *tile;
-	room_data *room;
 	
-	map->island = island;
-	
-	// if there's a real room
-	if ((room = real_real_room(map->vnum))) {
-		SET_ISLAND_ID(room, island);
-	}
+	map->shared->island_id = island;
+	map->shared->island_ptr = get_island(island, TRUE);
 	
 	// check neighboring tiles
 	for (x = -1; x <= 1; ++x) {
@@ -1405,7 +1533,7 @@ void number_island(struct map_data *map, int island) {
 			if (get_coord_shift(MAP_X_COORD(map->vnum), MAP_Y_COORD(map->vnum), x, y, &new_x, &new_y)) {
 				tile = &(world_map[new_x][new_y]);
 				
-				if (!SECT_FLAGGED(tile->sector_type, SECTF_NON_ISLAND) && tile->island <= 0) {
+				if (!SECT_FLAGGED(tile->sector_type, SECTF_NON_ISLAND) && tile->shared->island_id <= 0) {
 					// add to stack
 					push_island(tile);
 				}
@@ -1438,18 +1566,18 @@ void number_and_count_islands(bool reset) {
 	bool re_empire = (top_island_num != -1);
 	struct island_num_data_t *item;
 	struct island_info *isle;
+	room_data *room, *next_room, *maploc;
 	struct map_data *map;
-	room_data *room;
 	int iter, use_id;
 	
 	// find top island id (and reset if requested)
-	top_island_num = -1;
+	top_island_num = 0;	// this ensures any new island ID has a minimum of 1
 	for (map = land_map; map; map = map->next) {
 		if (reset || SECT_FLAGGED(map->sector_type, SECTF_NON_ISLAND)) {
-			map->island = NO_ISLAND;
+			map->shared->island_id = NO_ISLAND;
 		}
 		else {
-			top_island_num = MAX(top_island_num, map->island);
+			top_island_num = MAX(top_island_num, map->shared->island_id);
 		}
 	}
 	
@@ -1458,11 +1586,11 @@ void number_and_count_islands(bool reset) {
 	// 1. expand EXISTING islands
 	if (!reset) {
 		for (map = land_map; map; map = map->next) {
-			if (map->island == NO_ISLAND) {
+			if (map->shared->island_id == NO_ISLAND) {
 				continue;
 			}
 			
-			use_id = map->island;
+			use_id = map->shared->island_id;
 			push_island(map);
 			
 			while ((item = pop_island())) {
@@ -1474,7 +1602,7 @@ void number_and_count_islands(bool reset) {
 	
 	// 2. look for places that have no island id but need one -- and also measure islands while we're here
 	for (map = land_map; map; map = map->next) {
-		if (map->island == NO_ISLAND && !SECT_FLAGGED(map->sector_type, SECTF_NON_ISLAND)) {
+		if (map->shared->island_id == NO_ISLAND && !SECT_FLAGGED(map->sector_type, SECTF_NON_ISLAND)) {
 			use_id = ++top_island_num;
 			push_island(map);
 			
@@ -1484,7 +1612,7 @@ void number_and_count_islands(bool reset) {
 			}
 		}
 		else {
-			use_id = map->island;
+			use_id = map->shared->island_id;
 		}
 		
 		HASH_FIND_INT(list, &use_id, data);
@@ -1542,6 +1670,22 @@ void number_and_count_islands(bool reset) {
 		free(data);
 	}
 	
+	// update all island pointers
+	LL_FOREACH(land_map, map) {
+		map->shared->island_ptr = (map->shared->island_id != NO_ISLAND) ? get_island(map->shared->island_id, TRUE) : NULL;
+	}
+	
+	// update all interior rooms
+	HASH_ITER(hh, world_table, room, next_room) {
+		if (!(maploc = get_map_location_for(room)) || (maploc == room)) {
+			continue;
+		}
+		
+		GET_ISLAND_ID(room) = GET_ISLAND_ID(maploc);
+		GET_ISLAND(room) = GET_ISLAND(maploc);
+		GET_MAP_LOC(room) = (GET_ROOM_VNUM(maploc) < MAP_SIZE ? &(world_map[FLAT_X_COORD(maploc)][FLAT_Y_COORD(maploc)]) : NULL);
+	}
+	
 	// lastly
 	if (re_empire) {
 		reread_empire_tech(NULL);
@@ -1558,10 +1702,14 @@ void clear_char(char_data *ch) {
 
 	ch->vnum = NOBODY;
 	GET_POS(ch) = POS_STANDING;
+	SET_SIZE(ch) = SIZE_NORMAL;
 	MOB_INSTANCE_ID(ch) = NOTHING;
 	MOB_DYNAMIC_SEX(ch) = NOTHING;
 	MOB_DYNAMIC_NAME(ch) = NOTHING;
 	MOB_PURSUIT_LEASH_LOC(ch) = NOWHERE;
+	GET_ROPE_VNUM(ch) = NOTHING;
+	
+	ch->customized = FALSE;
 }
 
 
@@ -1593,13 +1741,11 @@ void init_player_specials(char_data *ch) {
 	GET_TOMB_ROOM(ch) = NOWHERE;
 	GET_ADVENTURE_SUMMON_RETURN_LOCATION(ch) = NOWHERE;
 	GET_ADVENTURE_SUMMON_RETURN_MAP(ch) = NOWHERE;
+	GET_ADVENTURE_SUMMON_INSTANCE_ID(ch) = NOTHING;
 	GET_LAST_TELL(ch) = NOBODY;
 	GET_TEMPORARY_ACCOUNT_ID(ch) = NOTHING;
 	GET_IMMORTAL_LEVEL(ch) = -1;	// Not an immortal
-	
-	for (iter = 0; iter < MAX_REWARDS_PER_DAY; ++iter) {
-		GET_REWARDED_TODAY(ch, iter) = -1;
-	}
+	USING_POISON(ch) = NOTHING;
 	
 	for (iter = 0; iter < NUM_ARCHETYPE_TYPES; ++iter) {
 		CREATION_ARCHETYPE(ch, iter) = NOTHING;
@@ -1782,6 +1928,27 @@ const char *versions_list[] = {
 	"b4.36",
 	"b4.38",
 	"b4.39",
+	"b5.1",
+	"b5.3",
+	"b5.14",
+	"b5.17",
+	"b5.19",
+	"b5.20",
+	"b5.23",
+	"b5.24",
+	"b5.25",
+	"b5.30",
+	"b5.34",
+	"b5.35",
+	"b5.37",
+	"b5.38",
+	"b5.40",
+	"b5.45",
+	"b5.47",
+	"b5.48",
+	"b5.58",
+	"b5.60",
+	"b5.80",
 	"\n"	// be sure the list terminates with \n
 };
 
@@ -1794,9 +1961,14 @@ const char *versions_list[] = {
 int get_last_boot_version(void) {
 	char str[256];
 	FILE *fl;
+	int iter;
 	
 	if (!(fl = fopen(VERSION_FILE, "r"))) {
-		return -1;
+		// if no file, do not run auto-updaters -- skip them
+		for (iter = 0; *versions_list[iter] != '\n'; ++iter) {
+			// just looking for last entry
+		}
+		return iter - 1;
 	}
 	
 	sprintf(buf, "version file");
@@ -1837,8 +2009,6 @@ PLAYER_UPDATE_FUNC(b2_8_update_players) {
 
 // 2.11 loads inventories and attaches triggers
 PLAYER_UPDATE_FUNC(b2_11_update_players) {
-	void check_delayed_load(char_data *ch);
-
 	obj_data *obj, *proto;
 	int iter;
 	
@@ -1910,7 +2080,6 @@ void b3_1_mine_update(void) {
 
 
 PLAYER_UPDATE_FUNC(b3_2_player_gear_disenchant) {
-	void check_delayed_load(char_data *ch);
 	obj_data *obj, *next_obj, *new;
 	int iter;
 	
@@ -2019,6 +2188,7 @@ void b3_2_map_and_gear(void) {
 // NOTE: the cloth is not storable, so any empire with it in normal storage must have had the bug
 void b3_6_einv_fix(void) {
 	struct empire_storage_data *store, *next_store;
+	struct empire_island *isle, *next_isle;
 	empire_data *emp, *next_emp;
 	obj_data *proto;
 	int total, amt;
@@ -2036,14 +2206,16 @@ void b3_6_einv_fix(void) {
 	
 	HASH_ITER(hh, empire_table, emp, next_emp) {
 		total = 0;
-		LL_FOREACH_SAFE(EMPIRE_STORAGE(emp), store, next_store) {
-			if (store->vnum == vnum) {
-				amt = store->amount;
-				total += amt;
-				add_to_empire_storage(emp, store->island, cloth, 4 * amt);
-				add_to_empire_storage(emp, store->island, silver, 2 * amt);
-				LL_DELETE(EMPIRE_STORAGE(emp), store);
-				free(store);
+		HASH_ITER(hh, EMPIRE_ISLANDS(emp), isle, next_isle) {
+			HASH_ITER(hh, isle->store, store, next_store) {
+				if (store->vnum == vnum) {
+					amt = store->amount;
+					total += amt;
+					add_to_empire_storage(emp, isle->island, cloth, 4 * amt);
+					add_to_empire_storage(emp, isle->island, silver, 2 * amt);
+					HASH_DEL(isle->store, store);
+					free(store);
+				}
 			}
 		}
 		
@@ -2070,8 +2242,6 @@ void b3_11_ship_fix(void) {
 
 // removes AFF_SENSE_HIDE
 PLAYER_UPDATE_FUNC(b3_12_update_players) {
-	void check_delayed_load(char_data *ch);
-	
 	// only care if they have a permanent sense-hide
 	if (!AFF_FLAGGED(ch, AFF_SENSE_HIDE)) {
 		return;
@@ -2189,8 +2359,6 @@ PLAYER_UPDATE_FUNC(b4_1_approve_players) {
 
 // adds current mount to mounts list
 PLAYER_UPDATE_FUNC(b4_2_mount_update) {
-	void check_delayed_load(char_data *ch);
-	
 	check_delayed_load(ch);
 	
 	if (GET_MOUNT_VNUM(ch)) {
@@ -2356,6 +2524,1004 @@ void b4_39_data_conversion(void) {
 		
 		reset_time();
 	}
+}
+
+
+// b5.1 changes the values of ATYPE_x consts and this updates existing affects
+PLAYER_UPDATE_FUNC(b5_1_update_players) {
+	void free_var_el(struct trig_var_data *var);
+	
+	struct trig_var_data *var, *next_var;
+	struct over_time_effect_type *dot;
+	struct affected_type *af;
+	bool delete;
+	
+	// some variables from the stock game content
+	const int jungletemple_tokens = 18500;
+	const int roc_tokens_evil = 11003;
+	const int roc_tokens_good = 11004;
+	const int dragtoken_128 = 10900;
+	const int permafrost_tokens_104 = 10550;
+	const int adventureguild_chelonian_tokens = 18200;
+	
+	check_delayed_load(ch);
+	
+	LL_FOREACH(ch->affected, af) {
+		if (af->type < 3000) {
+			af->type += 3000;
+		}
+	}
+	
+	LL_FOREACH(ch->over_time_effects, dot) {
+		if (dot->type < 3000) {
+			dot->type += 3000;
+		}
+	}
+	
+	if (SCRIPT(ch) && SCRIPT(ch)->global_vars) {
+		LL_FOREACH_SAFE(SCRIPT(ch)->global_vars, var, next_var) {
+			// things just being deleted (now using cooldowns)
+			if (!strncmp(var->name, "minipet", 7)) {
+				delete = TRUE;
+			}
+			else if (!strcmp(var->name, "last_hestian_time")) {
+				delete = TRUE;
+			}
+			else if (!strcmp(var->name, "last_conveyance_time")) {
+				delete = TRUE;
+			}
+			else if (!strcmp(var->name, "last_skycleave_trinket_time")) {
+				delete = TRUE;
+			}
+			else if (!strcmp(var->name, "last_tortoise_time")) {
+				delete = TRUE;
+			}
+			else if (!strcmp(var->name, "tomb10770")) {
+				delete = TRUE;
+			}
+			else if (!strcmp(var->name, "summon_10728")) {
+				delete = TRUE;
+			}
+			
+			// things converting to currencies
+			else if (!strcmp(var->name, "jungletemple_tokens")) {
+				add_currency(ch, jungletemple_tokens, atoi(var->value));
+				delete = TRUE;
+			}
+			else if (!strcmp(var->name, "roc_tokens_evil")) {
+				add_currency(ch, roc_tokens_evil, atoi(var->value));
+				delete = TRUE;
+			}
+			else if (!strcmp(var->name, "roc_tokens_good")) {
+				add_currency(ch, roc_tokens_good, atoi(var->value));
+				delete = TRUE;
+			}
+			else if (!strcmp(var->name, "dragtoken_128")) {
+				add_currency(ch, dragtoken_128, atoi(var->value));
+				delete = TRUE;
+			}
+			else if (!strcmp(var->name, "permafrost_tokens_104")) {
+				add_currency(ch, permafrost_tokens_104, atoi(var->value));
+				delete = TRUE;
+			}
+			else if (!strcmp(var->name, "adventureguild_chelonian_tokens")) {
+				add_currency(ch, adventureguild_chelonian_tokens, atoi(var->value));
+				delete = TRUE;
+			}
+			else {
+				delete = FALSE;
+			}
+			
+			// if requested, delete it
+			if (delete) {
+				LL_DELETE(SCRIPT(ch)->global_vars, var);
+				free_var_el(var);
+			}
+		}
+	}
+}
+
+
+// b5.1 convert resource action vnums (all resource actions += 1000)
+void b5_1_global_update(void) {
+	struct instance_data *inst, *next_inst;
+	craft_data *craft, *next_craft;
+	adv_data *adv, *next_adv;
+	bld_data *bld, *next_bld;
+	vehicle_data *veh, *next_veh;
+	room_data *room, *next_room;
+	struct resource_data *res;
+	
+	// adventures
+	HASH_ITER(hh, adventure_table, adv, next_adv) {
+		if (IS_SET(GET_ADV_FLAGS(adv), ADV_IN_DEVELOPMENT)) {
+			continue;	// skip in-dev
+		}
+		if (!IS_SET(GET_ADV_FLAGS(adv), ADV_CAN_DELAY_LOAD)) {
+			continue;	// only want delayables
+		}
+		
+		// delete 'em
+		LL_FOREACH_SAFE(instance_list, inst, next_inst) {
+			if (INST_ADVENTURE(inst) == adv) {
+				delete_instance(inst, FALSE);
+			}
+		}
+	}
+	
+	// crafts
+	HASH_ITER(hh, craft_table, craft, next_craft) {
+		LL_FOREACH(GET_CRAFT_RESOURCES(craft), res) {
+			if (res->type == RES_ACTION && res->vnum < 100) {
+				res->vnum += 1000;
+				save_library_file_for_vnum(DB_BOOT_CRAFT, GET_CRAFT_VNUM(craft));
+			}
+		}
+	}
+	
+	// buildings
+	HASH_ITER(hh, building_table, bld, next_bld) {
+		LL_FOREACH(GET_BLD_YEARLY_MAINTENANCE(bld), res) {
+			if (res->type == RES_ACTION && res->vnum < 100) {
+				res->vnum += 1000;
+				save_library_file_for_vnum(DB_BOOT_BLD, GET_BLD_VNUM(bld));
+			}
+		}
+	}
+	
+	// vehicles
+	HASH_ITER(hh, vehicle_table, veh, next_veh) {
+		LL_FOREACH(VEH_YEARLY_MAINTENANCE(veh), res) {
+			if (res->type == RES_ACTION && res->vnum < 100) {
+				res->vnum += 1000;
+				save_library_file_for_vnum(DB_BOOT_VEH, VEH_VNUM(veh));
+			}
+		}
+	}
+	
+	// live rooms
+	HASH_ITER(hh, world_table, room, next_room) {
+		LL_FOREACH(BUILDING_RESOURCES(room), res) {
+			if (res->type == RES_ACTION && res->vnum < 100) {
+				res->vnum += 1000;
+			}
+		}
+	}
+	
+	// live vehicles
+	LL_FOREACH(vehicle_list, veh) {
+		LL_FOREACH(VEH_NEEDS_RESOURCES(veh), res) {
+			if (res->type == RES_ACTION && res->vnum < 100) {
+				res->vnum += 1000;
+			}
+		}
+	}
+	
+	save_whole_world();
+	
+	update_all_players(NULL, b5_1_update_players);
+}
+
+
+// b5.3 looks for missile weapons that need updates
+void b5_3_missile_update(void) {
+	obj_data *obj, *next_obj;
+	
+	HASH_ITER(hh, object_table, obj, next_obj) {
+		if (!IS_MISSILE_WEAPON(obj)) {
+			continue;
+		}
+		
+		// ALL bows are TYPE_BOW before this update
+		if (GET_MISSILE_WEAPON_TYPE(obj) != TYPE_BOW) {
+			log(" - updating %d %s from %d to %d (bow)", GET_OBJ_VNUM(obj), skip_filler(GET_OBJ_SHORT_DESC(obj)), GET_MISSILE_WEAPON_TYPE(obj), TYPE_BOW);
+			GET_OBJ_VAL(obj, VAL_MISSILE_WEAPON_TYPE) = TYPE_BOW;
+			save_library_file_for_vnum(DB_BOOT_OBJ, GET_OBJ_VNUM(obj));
+		}
+	}
+}
+
+
+// b5.14 refreshes superior items
+PLAYER_UPDATE_FUNC(b5_14_player_superiors) {
+	obj_data *obj, *next_obj, *new;
+	int iter;
+	
+	check_delayed_load(ch);
+	
+	for (iter = 0; iter < NUM_WEARS; ++iter) {
+		if ((obj = GET_EQ(ch, iter)) && OBJ_FLAGGED(obj, OBJ_SUPERIOR) && obj_proto(GET_OBJ_VNUM(obj))) {
+			new = fresh_copy_obj(obj, GET_OBJ_CURRENT_SCALE_LEVEL(obj));
+			swap_obj_for_obj(obj, new);
+			extract_obj(obj);
+		}
+	}
+	for (obj = ch->carrying; obj; obj = next_obj) {
+		next_obj = obj->next_content;
+		if (OBJ_FLAGGED(obj, OBJ_SUPERIOR) && obj_proto(GET_OBJ_VNUM(obj))) {
+			new = fresh_copy_obj(obj, GET_OBJ_CURRENT_SCALE_LEVEL(obj));
+			swap_obj_for_obj(obj, new);
+			extract_obj(obj);
+		}
+	}
+}
+
+
+// removes the PLAYER-MADE flag from rooms and sets their "natural sect" instead
+void b5_14_superior_items(void) {
+	void save_trading_post();
+
+	obj_data *obj, *next_obj, *new, *proto;
+	struct empire_unique_storage *eus;
+	struct trading_post_data *tpd;
+	empire_data *emp, *next_emp;
+		
+	log("Applying b5.14 update...");
+	
+	log(" - refreshing superiors in the object list...");
+	for (obj = object_list; obj; obj = next_obj) {
+		next_obj = obj->next;
+		if (OBJ_FLAGGED(obj, OBJ_SUPERIOR) && (proto = obj_proto(GET_OBJ_VNUM(obj))) && !OBJ_FLAGGED(proto, OBJ_SUPERIOR)) {
+			new = fresh_copy_obj(obj, GET_OBJ_CURRENT_SCALE_LEVEL(obj));
+			swap_obj_for_obj(obj, new);
+			extract_obj(obj);
+		}
+	}
+	
+	log(" - refreshing superiors in warehouse objects...");
+	HASH_ITER(hh, empire_table, emp, next_emp) {
+		for (eus = EMPIRE_UNIQUE_STORAGE(emp); eus; eus = eus->next) {
+			if ((obj = eus->obj) && OBJ_FLAGGED(obj, OBJ_SUPERIOR) && (proto = obj_proto(GET_OBJ_VNUM(obj))) && !OBJ_FLAGGED(proto, OBJ_SUPERIOR)) {
+				new = fresh_copy_obj(obj, GET_OBJ_CURRENT_SCALE_LEVEL(obj));
+				eus->obj = new;
+				extract_obj(obj);
+			}
+		}
+	}
+	
+	log(" - refreshing superiors in trading post objects...");
+	for (tpd = trading_list; tpd; tpd = tpd->next) {
+		if ((obj = tpd->obj) && OBJ_FLAGGED(obj, OBJ_SUPERIOR) && (proto = obj_proto(GET_OBJ_VNUM(obj))) && !OBJ_FLAGGED(proto, OBJ_SUPERIOR)) {
+			new = fresh_copy_obj(obj, GET_OBJ_CURRENT_SCALE_LEVEL(obj));
+			tpd->obj = new;
+			extract_obj(obj);
+		}
+	}
+	
+	log(" - refreshing superiors in player inventories...");
+	update_all_players(NULL, b5_14_player_superiors);
+	
+	// ensure everything gets saved this way since we won't do this again
+	save_all_empires();
+	save_trading_post();
+	save_whole_world();
+}
+
+
+// looks for stray flags in the world
+void b5_19_world_fix(void) {
+	struct map_data *map;
+	bitvector_t flags;
+	room_data *room;
+	bld_data *bld;
+	
+	bitvector_t flags_to_wipe = ROOM_AFF_DARK | ROOM_AFF_SILENT | ROOM_AFF_NO_WEATHER | ROOM_AFF_NO_TELEPORT;
+	bitvector_t empire_only_flags = ROOM_AFF_PUBLIC | ROOM_AFF_NO_WORK | ROOM_AFF_NO_DISMANTLE;
+	
+	LL_FOREACH(land_map, map) {
+		if (!map->shared->affects && !map->shared->base_affects) {
+			continue;	// only looking for 'affected' tiles
+		}
+		
+		// used several times below:
+		room = real_real_room(map->vnum);
+		
+		// building affs fix
+		if (!room || !(bld = GET_BUILDING(room))) {
+			REMOVE_BIT(map->shared->base_affects, flags_to_wipe);
+			REMOVE_BIT(map->shared->affects, flags_to_wipe);
+		}
+		else {	// has a building -- look for errors
+			flags = flags_to_wipe;
+			REMOVE_BIT(flags, GET_BLD_BASE_AFFECTS(bld));
+			if (flags) {	// do not remove flags the building actually uses
+				REMOVE_BIT(ROOM_BASE_FLAGS(room), flags);
+				REMOVE_BIT(ROOM_AFF_FLAGS(room), flags);
+			}
+			affect_total_room(room);
+		}
+		
+		// empire flags (just check that these are not on unclaimed rooms)
+		if (!room || !ROOM_OWNER(room)) {
+			REMOVE_BIT(map->shared->base_affects, empire_only_flags);
+			REMOVE_BIT(map->shared->affects, empire_only_flags);
+			
+			if (room) {
+				affect_total_room(room);
+			}
+		}
+	}
+	
+	save_whole_world();
+}
+
+
+// finds old-style player-made rivers and converts them to canals
+void b5_20_canal_fix(void) {
+	struct map_data *map;
+	sector_data *canl;
+	bool change;
+	
+	int river_sect = 5;
+	int canal_sect = 19;
+	int estuary_sect = 53;
+	
+	if (!(canl = sector_proto(canal_sect))) {
+		log("SYSERR: failed to do b5_20_canal_fix because canal sector is invalid.");
+		exit(0);
+	}
+	
+	LL_FOREACH(land_map, map) {
+		// is a river but not a real river?
+		change = GET_SECT_VNUM(map->base_sector) == river_sect && GET_SECT_VNUM(map->natural_sector) != river_sect;
+		
+		// is an estuary but not a real one or natural river?
+		change |= GET_SECT_VNUM(map->base_sector) == estuary_sect && GET_SECT_VNUM(map->natural_sector) != estuary_sect && GET_SECT_VNUM(map->natural_sector) != river_sect;
+		
+		if (change) {
+			// only change current sector if currently river
+			if (map->sector_type == map->base_sector) {
+				perform_change_sect(NULL, map, canl);
+			}
+			// always change base sector (it was required to hit this condition)
+			perform_change_base_sect(NULL, map, canl);
+			
+			// for debugging:
+			// log("- updated (%d, %d) from river to canal", MAP_X_COORD(map->vnum), MAP_Y_COORD(map->vnum));
+		}
+	}
+}
+
+
+// updates potions in player inventory
+PLAYER_UPDATE_FUNC(b5_23_player_potion_update) {
+	obj_data *obj, *next_obj, *new;
+	int iter;
+	
+	check_delayed_load(ch);
+	
+	for (iter = 0; iter < NUM_WEARS; ++iter) {
+		if ((obj = GET_EQ(ch, iter)) && IS_POTION(obj) && obj_proto(GET_OBJ_VNUM(obj))) {
+			new = fresh_copy_obj(obj, GET_OBJ_CURRENT_SCALE_LEVEL(obj));
+			swap_obj_for_obj(obj, new);
+			extract_obj(obj);
+		}
+	}
+	LL_FOREACH_SAFE2(ch->carrying, obj, next_obj, next_content) {
+		if (IS_POTION(obj) && obj_proto(GET_OBJ_VNUM(obj))) {
+			new = fresh_copy_obj(obj, GET_OBJ_CURRENT_SCALE_LEVEL(obj));
+			swap_obj_for_obj(obj, new);
+			extract_obj(obj);
+		}
+	}
+}
+
+
+// reloads and rescales all potions, and moves them from warehouse to einv if possible
+void b5_23_potion_update(void) {
+	void save_trading_post();
+	
+	struct empire_unique_storage *eus, *next_eus;
+	obj_data *obj, *next_obj, *new, *proto;
+	struct trading_post_data *tpd;
+	empire_data *emp, *next_emp;
+	
+	log("Applying b5.23 item update...");
+	
+	log(" - updating the object list...");
+	LL_FOREACH_SAFE(object_list, obj, next_obj) {
+		if (IS_POTION(obj) && (proto = obj_proto(GET_OBJ_VNUM(obj)))) {
+			new = fresh_copy_obj(obj, GET_OBJ_CURRENT_SCALE_LEVEL(obj));
+			swap_obj_for_obj(obj, new);
+			extract_obj(obj);
+		}
+	}
+	
+	log(" - updating warehouse objects...");
+	HASH_ITER(hh, empire_table, emp, next_emp) {
+		LL_FOREACH_SAFE(EMPIRE_UNIQUE_STORAGE(emp), eus, next_eus) {
+			if ((obj = eus->obj) && IS_POTION(obj) && (proto = obj_proto(GET_OBJ_VNUM(obj)))) {
+				if (proto->storage) {
+					// move to regular einv if now possible
+					add_to_empire_storage(emp, eus->island, GET_OBJ_VNUM(proto), eus->amount);
+					remove_eus_entry(eus, emp);
+				}
+				else {	// otherwise replace with a fresh copy
+					new = fresh_copy_obj(obj, GET_OBJ_CURRENT_SCALE_LEVEL(obj));
+					eus->obj = new;
+				}
+				
+				// either way the original is gone?
+				extract_obj(obj);
+			}
+		}
+	}
+	
+	log(" - updating trading post objects...");
+	LL_FOREACH(trading_list, tpd) {
+		if ((obj = tpd->obj) && IS_POTION(obj) && (proto = obj_proto(GET_OBJ_VNUM(obj)))) {
+			new = fresh_copy_obj(obj, GET_OBJ_CURRENT_SCALE_LEVEL(obj));
+			tpd->obj = new;
+			extract_obj(obj);
+		}
+	}
+	
+	log(" - updating player inventories...");
+	update_all_players(NULL, b5_23_player_potion_update);
+	
+	// ensure everything gets saved this way since we won't do this again
+	save_all_empires();
+	save_trading_post();
+	save_whole_world();
+}
+
+
+// updates poisons in player inventory
+PLAYER_UPDATE_FUNC(b5_24_player_poison_update) {
+	obj_data *obj, *next_obj, *new;
+	int iter;
+	
+	check_delayed_load(ch);
+	
+	for (iter = 0; iter < NUM_WEARS; ++iter) {
+		if ((obj = GET_EQ(ch, iter)) && IS_POISON(obj) && obj_proto(GET_OBJ_VNUM(obj))) {
+			new = fresh_copy_obj(obj, GET_OBJ_CURRENT_SCALE_LEVEL(obj));
+			swap_obj_for_obj(obj, new);
+			extract_obj(obj);
+		}
+	}
+	LL_FOREACH_SAFE2(ch->carrying, obj, next_obj, next_content) {
+		if (IS_POISON(obj) && obj_proto(GET_OBJ_VNUM(obj))) {
+			new = fresh_copy_obj(obj, GET_OBJ_CURRENT_SCALE_LEVEL(obj));
+			swap_obj_for_obj(obj, new);
+			extract_obj(obj);
+		}
+	}
+}
+
+
+// reloads and rescales all poisons, and moves them from warehouse to einv if possible
+void b5_24_poison_update(void) {
+	void save_trading_post();
+	
+	struct empire_unique_storage *eus, *next_eus;
+	obj_data *obj, *next_obj, *new, *proto;
+	struct trading_post_data *tpd;
+	empire_data *emp, *next_emp;
+	
+	log("Applying b5.24 item update...");
+	
+	log(" - updating the object list...");
+	LL_FOREACH_SAFE(object_list, obj, next_obj) {
+		if (IS_POISON(obj) && (proto = obj_proto(GET_OBJ_VNUM(obj)))) {
+			new = fresh_copy_obj(obj, GET_OBJ_CURRENT_SCALE_LEVEL(obj));
+			swap_obj_for_obj(obj, new);
+			extract_obj(obj);
+		}
+	}
+	
+	log(" - updating warehouse objects...");
+	HASH_ITER(hh, empire_table, emp, next_emp) {
+		LL_FOREACH_SAFE(EMPIRE_UNIQUE_STORAGE(emp), eus, next_eus) {
+			if ((obj = eus->obj) && IS_POISON(obj) && (proto = obj_proto(GET_OBJ_VNUM(obj)))) {
+				if (proto->storage) {
+					// move to regular einv if now possible
+					add_to_empire_storage(emp, eus->island, GET_OBJ_VNUM(proto), eus->amount);
+					remove_eus_entry(eus, emp);
+				}
+				else {	// otherwise replace with a fresh copy
+					new = fresh_copy_obj(obj, GET_OBJ_CURRENT_SCALE_LEVEL(obj));
+					eus->obj = new;
+				}
+				
+				// either way the original is gone?
+				extract_obj(obj);
+			}
+		}
+	}
+	
+	log(" - updating trading post objects...");
+	LL_FOREACH(trading_list, tpd) {
+		if ((obj = tpd->obj) && IS_POISON(obj) && (proto = obj_proto(GET_OBJ_VNUM(obj)))) {
+			new = fresh_copy_obj(obj, GET_OBJ_CURRENT_SCALE_LEVEL(obj));
+			tpd->obj = new;
+			extract_obj(obj);
+		}
+	}
+	
+	log(" - updating player inventories...");
+	update_all_players(NULL, b5_24_player_poison_update);
+	
+	// ensure everything gets saved this way since we won't do this again
+	save_all_empires();
+	save_trading_post();
+	save_whole_world();
+}
+
+
+// sets dummy data on existing trenches/canals to prevent issues with new un-trenching code on existing games
+void b5_25_trench_update(void) {
+	struct map_data *map;
+	int count = 0;
+	
+	any_vnum canal = 19;
+	
+	log("Applying b5.25 trench update...");
+	
+	LL_FOREACH(land_map, map) {
+		if (GET_SECT_VNUM(map->sector_type) == canal || GET_SECT_VNUM(map->base_sector) == canal || SECT_FLAGGED(map->sector_type, SECTF_IS_TRENCH) || SECT_FLAGGED(map->base_sector, SECTF_IS_TRENCH)) {
+			// set this to NOTHING since we don't know the original type, and '0' would result in all trenches un-trenching to plains
+			set_extra_data(&map->shared->extra_data, ROOM_EXTRA_TRENCH_ORIGINAL_SECTOR, NOTHING);
+			++count;
+		}
+	}
+	
+	log("- updated %d tile%s", count, PLURAL(count));
+}
+
+
+// fixes some empire data
+void b5_30_empire_update(void) {
+	struct empire_trade_data *trade, *next_trade;
+	empire_data *emp, *next_emp;
+	obj_data *proto;
+	int iter;
+	
+	log("Applying b5.30 empire update...");
+	
+	HASH_ITER(hh, empire_table, emp, next_emp) {
+		// fixes an issue where some numbers were defaulted higher -- these attributes are not even used prior to b5.30
+		for (iter = 0; iter < NUM_EMPIRE_ATTRIBUTES; ++iter) {
+			EMPIRE_ATTRIBUTE(emp, iter) = 0;
+		}
+		
+		// fixes an older issue with trade data -- unstorable items
+		LL_FOREACH_SAFE(EMPIRE_TRADE(emp), trade, next_trade) {
+			if (!(proto = obj_proto(trade->vnum)) || !proto->storage) {
+				LL_DELETE(EMPIRE_TRADE(emp), trade);
+			}
+		}
+		
+		EMPIRE_NEEDS_SAVE(emp) = TRUE;
+		EMPIRE_NEEDS_STORAGE_SAVE(emp) = TRUE;
+	}
+	
+	save_all_empires();
+}
+
+
+PLAYER_UPDATE_FUNC(b5_34_player_update) {
+	void remove_ability_by_set(char_data *ch, ability_data *abil, int skill_set, bool reset_levels);
+	
+	struct player_skill_data *skill, *next_skill;
+	struct player_ability_data *abil, *next_abil;
+	int iter;
+	
+	check_delayed_load(ch);
+	
+	// check empire skill
+	if (!IS_IMMORTAL(ch)) {
+		HASH_ITER(hh, GET_SKILL_HASH(ch), skill, next_skill) {
+			// delete empire skill entry
+			if (skill->vnum == 1) {
+				// gain bonus exp
+				SAFE_ADD(GET_DAILY_BONUS_EXPERIENCE(ch), skill->level, 0, UCHAR_MAX, FALSE);
+				HASH_DEL(GET_SKILL_HASH(ch), skill);
+				free(skill);
+			}
+		}
+	}
+	
+	// clear all ability purchases
+	HASH_ITER(hh, GET_ABILITY_HASH(ch), abil, next_abil) {
+		for (iter = 0; iter < NUM_SKILL_SETS; ++iter) {
+			remove_ability_by_set(ch, find_ability_by_vnum(abil->vnum), iter, FALSE);
+		}
+	}
+	
+	// remove cooldowns
+	while (ch->cooldowns) {
+		remove_cooldown(ch, ch->cooldowns);
+	}
+	
+	// remove all affects
+	while (ch->affected) {
+		affect_remove(ch, ch->affected);
+	}
+	while (ch->over_time_effects) {
+		dot_remove(ch, ch->over_time_effects);
+	}
+}
+
+
+// part of the HUGE progression update
+void b5_34_mega_update(void) {
+	void free_empire_goals(struct empire_goal *hash);
+	void free_empire_completed_goals(struct empire_completed_goal *hash);
+	
+	struct instance_data *inst, *next_inst;
+	struct empire_political_data *pol;
+	empire_data *emp, *next_emp;
+	char_data *mob, *next_mob;
+	int iter;
+	
+	log("Applying b5.34 progression update...");
+	
+	// remove Spirit of Progress mob
+	LL_FOREACH_SAFE(character_list, mob, next_mob) {
+		if (IS_NPC(mob) && GET_MOB_VNUM(mob) == 10856) {
+			extract_char(mob);
+		}
+	}
+	
+	// remove all instances of adventure 50 (was shut off by this patch)
+	LL_FOREACH_SAFE(instance_list, inst, next_inst) {
+		if (INST_ADVENTURE(inst) && GET_ADV_VNUM(INST_ADVENTURE(inst)) == 50) {
+			delete_instance(inst, TRUE);
+		}
+	}
+	
+	// update empires:
+	HASH_ITER(hh, empire_table, emp, next_emp) {
+		// remove all 'trade' relations
+		LL_FOREACH(EMPIRE_DIPLOMACY(emp), pol) {
+			REMOVE_BIT(pol->type, DIPL_TRADE);
+			REMOVE_BIT(pol->offer, DIPL_TRADE);
+		}
+		
+		// reset progression
+		free_empire_goals(EMPIRE_GOALS(emp));
+		EMPIRE_GOALS(emp) = NULL;
+		free_empire_completed_goals(EMPIRE_COMPLETED_GOALS(emp));
+		EMPIRE_COMPLETED_GOALS(emp) = NULL;
+		
+		// reset points
+		for (iter = 0; iter < NUM_PROGRESS_TYPES; ++iter) {
+			EMPIRE_PROGRESS_POINTS(emp, iter) = 0;
+		}
+		
+		// reset attributes
+		for (iter = 0; iter < NUM_EMPIRE_ATTRIBUTES; ++iter) {
+			EMPIRE_ATTRIBUTE(emp, iter) = 0;
+		}
+		
+		// reset techs
+		for (iter = 0; iter < NUM_TECHS; ++iter) {
+			EMPIRE_TECH(emp, iter) = 0;
+			EMPIRE_BASE_TECH(emp, iter) = 0;
+		}
+		
+		EMPIRE_NEEDS_SAVE(emp) = TRUE;
+	}
+	
+	// and players
+	update_all_players(NULL, b5_34_player_update);
+	
+	// rescan everyone
+	reread_empire_tech(NULL);
+}
+
+
+// fixes some progression goals
+void b5_35_progress_update(void) {
+	void add_learned_craft_empire(empire_data *emp, any_vnum vnum);
+	
+	struct empire_completed_goal *goal, *next_goal;
+	empire_data *emp, *next_emp;
+	
+	log("Applying b5.35 progression update...");
+	
+	HASH_ITER(hh, empire_table, emp, next_emp) {
+		HASH_ITER(hh, EMPIRE_COMPLETED_GOALS(emp), goal, next_goal) {
+			// Some goals were changed in this patch. Need to update anybody who completed them.
+			switch (goal->vnum) {
+				case 3030: {	// Vanguard: change category
+					EMPIRE_PROGRESS_POINTS(emp, PROGRESS_INDUSTRY) -= 25;
+					EMPIRE_PROGRESS_POINTS(emp, PROGRESS_DEFENSE) += 25;
+					break;
+				}
+				case 2015: {	// Cache of Resources: remove workforce cap bonus
+					EMPIRE_ATTRIBUTE(emp, EATT_WORKFORCE_CAP) -= 100;
+					break;
+				}
+				case 2016: {	// Rare Surplus: add workforce cap bonus
+					EMPIRE_ATTRIBUTE(emp, EATT_WORKFORCE_CAP) += 100;
+					break;
+				}
+				case 4002: {	// World Famous: +25 terr
+					EMPIRE_ATTRIBUTE(emp, EATT_BONUS_TERRITORY) += 25;
+					break;
+				}
+				case 1902: {	// Stilt Buildings: +craft
+					add_learned_craft_empire(emp, 5207);	// river fishery
+					add_learned_craft_empire(emp, 5208);	// lake fishery
+					break;
+				}
+				
+				// things that give +5 territory now
+				case 1001:	// Homestead
+				case 1004:	// Expanding the Empire
+				case 1005:	// Masonry
+				case 2001:	// Clayworks
+				case 2010:	// Storage
+				case 2012:	// Artisans
+				case 2018:	// Collecting Herbs
+				case 2019:	// Herbal Empire
+				case 2031:	// Harvest Time
+				case 3001:	// Fortifications
+				case 3002:	// Building the Barracks
+				case 3031:	// Deterrence
+				case 4011:	// Enchanted Forest
+				case 4012:	// The Magic Grows
+				{
+					EMPIRE_ATTRIBUTE(emp, EATT_BONUS_TERRITORY) += 5;
+					break;
+				}
+				
+				// +50 territory
+				case 4013:	// Magic to Make...
+				case 2033: {	// Cornucopia
+					EMPIRE_ATTRIBUTE(emp, EATT_BONUS_TERRITORY) += 50;
+					break;
+				}
+			}
+		}
+		
+		EMPIRE_NEEDS_SAVE(emp) = TRUE;
+	}
+}
+
+
+// fixes some progression goals
+void b5_37_progress_update(void) {
+	void add_learned_craft_empire(empire_data *emp, any_vnum vnum);
+	
+	struct empire_completed_goal *goal, *next_goal;
+	struct instance_data *inst, *next_inst;
+	empire_data *emp, *next_emp;
+	
+	log("Applying b5.37 update...");
+	
+	HASH_ITER(hh, empire_table, emp, next_emp) {
+		HASH_ITER(hh, EMPIRE_COMPLETED_GOALS(emp), goal, next_goal) {
+			// Some goals were changed in this patch. Need to update anybody who completed them.
+			switch (goal->vnum) {
+				case 2011: {	// Foundations: +craft
+					add_learned_craft_empire(emp, 5209);	// depository
+					break;
+				}
+			}
+		}
+		
+		EMPIRE_NEEDS_SAVE(emp) = TRUE;
+	}
+	
+	// remove all instances of adventure 12600 (force respawn to attach trigger)
+	LL_FOREACH_SAFE(instance_list, inst, next_inst) {
+		if (INST_ADVENTURE(inst) && GET_ADV_VNUM(INST_ADVENTURE(inst)) == 12600) {
+			delete_instance(inst, TRUE);
+		}
+	}
+}
+
+
+// remove old Groves
+void b5_38_grove_update(void) {
+	struct instance_data *inst, *next_inst;
+	
+	log("Applying b5.38 update...");
+	
+	// remove all instances of adventure 100 (it's now in-dev)
+	LL_FOREACH_SAFE(instance_list, inst, next_inst) {
+		if (INST_ADVENTURE(inst) && GET_ADV_VNUM(INST_ADVENTURE(inst)) == 100) {
+			delete_instance(inst, TRUE);
+		}
+	}
+}
+
+
+// add new channels
+PLAYER_UPDATE_FUNC(b5_40_update_players) {
+	extern struct slash_channel *create_slash_channel(char *name);
+	extern struct player_slash_channel *find_on_slash_channel(char_data *ch, int id);
+	extern struct slash_channel *find_slash_channel_by_name(char *name, bool exact);
+	
+	struct player_slash_channel *slash;
+	struct slash_channel *chan;
+	int iter;
+	
+	char *to_join[] = { "grats", "death", "progress", "\n" };
+	
+	for (iter = 0; *to_join[iter] != '\n'; ++iter) {
+		if (!(chan = find_slash_channel_by_name(to_join[iter], TRUE))) {
+			chan = create_slash_channel(to_join[iter]);
+		}
+		if (!find_on_slash_channel(ch, chan->id)) {
+			CREATE(slash, struct player_slash_channel, 1);
+			slash->next = GET_SLASH_CHANNELS(ch);
+			GET_SLASH_CHANNELS(ch) = slash;
+			slash->id = chan->id;
+		}
+	}
+}
+
+
+// keep now has a variable number and old data must be converted
+void b5_45_keep_update(void) {
+	struct empire_storage_data *store, *next_store;
+	struct empire_island *isle, *next_isle;
+	empire_data *emp, *next_emp;
+	
+	log("Applying b5.45 'keep' update to empires...");
+	
+	HASH_ITER(hh, empire_table, emp, next_emp) {
+		HASH_ITER(hh, EMPIRE_ISLANDS(emp), isle, next_isle) {
+			HASH_ITER(hh, isle->store, store, next_store) {
+				if (store->keep == 1) {
+					// convert old 0/1 to 0/UNLIMITED
+					store->keep = UNLIMITED;
+					EMPIRE_NEEDS_STORAGE_SAVE(emp) = TRUE;
+				}
+			}
+		}
+	}
+	
+	save_all_empires();
+}
+
+
+// fix reputation
+PLAYER_UPDATE_FUNC(b5_47_update_players) {
+	void update_reputations(char_data *ch);
+	
+	struct player_faction_data *fct, *next;
+	bool any = FALSE;
+	
+	check_delayed_load(ch);
+	
+	HASH_ITER(hh, GET_FACTIONS(ch), fct, next) {
+		fct->value *= 10;	// this update raised the scale of faction rep by 10x
+		any = TRUE;
+	}
+	
+	if (any) {
+		update_reputations(ch);
+	}
+}
+
+
+// resets mountain tiles off-cycle because of the addition of tin
+void b5_47_mine_update(void) {
+	void save_island_table();
+	
+	struct island_info *isle, *next_isle;
+	struct map_data *tile;
+	bool any = FALSE;
+	room_data *room;
+	
+	const char *detect_desc = "   The island has ";
+	int len = strlen(detect_desc);
+	
+	log("Applying b5.47 update to clear mine data, update island flags, and fix player reputation...");
+	
+	// clear mines
+	LL_FOREACH(land_map, tile) {
+		if (!(room = real_real_room(tile->vnum)) || !room_has_function_and_city_ok(room, FNC_MINE)) {
+			remove_extra_data(&tile->shared->extra_data, ROOM_EXTRA_MINE_GLB_VNUM);
+			remove_extra_data(&tile->shared->extra_data, ROOM_EXTRA_MINE_AMOUNT);
+			remove_extra_data(&tile->shared->extra_data, ROOM_EXTRA_PROSPECT_EMPIRE);
+		}
+	}
+	save_whole_world();
+	
+	// island desc flags
+	HASH_ITER(hh, island_table, isle, next_isle) {
+		if (isle->desc && strncmp(isle->desc, detect_desc, len)) {
+			SET_BIT(isle->flags, ISLE_HAS_CUSTOM_DESC);
+			any = TRUE;
+		}
+	}
+	if (any) {
+		save_island_table();
+	}
+	
+	update_all_players(NULL, b5_47_update_players);
+}
+
+// adds a rope vnum to mobs that are tied
+void b5_48_rope_update(void) {
+	bool any = FALSE;
+	char_data *mob;
+	
+	obj_vnum OLD_ROPE = 2035;	// leather rope
+	
+	log("Applying b5.48 update to add ropes to tied mobs...");
+	LL_FOREACH(character_list, mob) {
+		if (IS_NPC(mob) && MOB_FLAGGED(mob, MOB_TIED)) {
+			GET_ROPE_VNUM(mob) = OLD_ROPE;
+			any = TRUE;
+		}
+	}
+	
+	if (any) {
+		save_whole_world();
+	}
+}
+
+
+// tracks current empire einv as "gathered items" to retroactively set gather totals
+void b5_58_gather_totals(void) {
+	void save_marked_empires();
+	
+	struct empire_island *isle, *next_isle;
+	struct empire_storage_data *store, *next_store;
+	empire_data *emp, *next_emp;
+	
+	log("Applying b5.58 update to empire gather totals...");
+	
+	// each empire
+	HASH_ITER(hh, empire_table, emp, next_emp) {
+		// each island
+		HASH_ITER(hh, EMPIRE_ISLANDS(emp), isle, next_isle) {
+			// storage
+			HASH_ITER(hh, isle->store, store, next_store) {
+				add_production_total(emp, store->vnum, store->amount);
+			}
+		}
+		
+		EMPIRE_NEEDS_STORAGE_SAVE(emp) = TRUE;
+	}
+	
+	save_marked_empires();
+}
+
+
+// add new channel
+PLAYER_UPDATE_FUNC(b5_60_update_players) {
+	extern struct slash_channel *create_slash_channel(char *name);
+	extern struct player_slash_channel *find_on_slash_channel(char_data *ch, int id);
+	extern struct slash_channel *find_slash_channel_by_name(char *name, bool exact);
+	
+	struct player_slash_channel *slash;
+	struct slash_channel *chan;
+	int iter;
+	
+	char *to_join[] = { "events", "\n" };
+	
+	for (iter = 0; *to_join[iter] != '\n'; ++iter) {
+		if (!(chan = find_slash_channel_by_name(to_join[iter], TRUE))) {
+			chan = create_slash_channel(to_join[iter]);
+		}
+		if (!find_on_slash_channel(ch, chan->id)) {
+			CREATE(slash, struct player_slash_channel, 1);
+			slash->next = GET_SLASH_CHANNELS(ch);
+			GET_SLASH_CHANNELS(ch) = slash;
+			slash->id = chan->id;
+		}
+	}
+}
+
+
+void b5_80_dailies_fix(void) {
+	void setup_daily_quest_cycles(int only_cycle);
+	
+	log("Applying b5.80 daily quests...");
+	setup_daily_quest_cycles(10700);
+	setup_daily_quest_cycles(16602);
+	setup_daily_quest_cycles(16604);
+	setup_daily_quest_cycles(16606);
+	setup_daily_quest_cycles(16611);
+	setup_daily_quest_cycles(16618);
 }
 
 
@@ -2566,8 +3732,79 @@ void check_version(void) {
 			b4_38_tower_triggers();
 		}
 		if (MATCH_VERSION("b4.39")) {
-			log("Converting datat to b4.39 format...");
+			log("Converting data to b4.39 format...");
 			b4_39_data_conversion();
+		}
+		// beta5
+		if (MATCH_VERSION("b5.1")) {
+			log("Updating to b5.1...");
+			b5_1_global_update();
+		}
+		if (MATCH_VERSION("b5.3")) {
+			log("Updating to b5.3...");
+			b5_3_missile_update();
+		}
+		if (MATCH_VERSION("b5.14")) {
+			b5_14_superior_items();
+		}
+		if (MATCH_VERSION("b5.17")) {
+			log("Updating to b5.17...");
+			save_all_empires();
+		}
+		if (MATCH_VERSION("b5.19")) {
+			log("Updating to b5.19...");
+			b5_19_world_fix();
+		}
+		if (MATCH_VERSION("b5.20")) {
+			log("Updating to b5.20...");
+			b5_20_canal_fix();
+		}
+		if (MATCH_VERSION("b5.23")) {
+			b5_23_potion_update();
+		}
+		if (MATCH_VERSION("b5.24")) {
+			b5_24_poison_update();
+		}
+		if (MATCH_VERSION("b5.25")) {
+			b5_25_trench_update();
+		}
+		if (MATCH_VERSION("b5.30")) {
+			b5_30_empire_update();
+		}
+		if (MATCH_VERSION("b5.34")) {
+			b5_34_mega_update();
+		}
+		if (MATCH_VERSION("b5.35")) {
+			b5_35_progress_update();
+		}
+		if (MATCH_VERSION("b5.37")) {
+			b5_37_progress_update();
+		}
+		if (MATCH_VERSION("b5.38")) {
+			b5_38_grove_update();
+		}
+		if (MATCH_VERSION("b5.40")) {
+			log("Applying b5.40 channel update to players...");
+			update_all_players(NULL, b5_40_update_players);
+		}
+		if (MATCH_VERSION("b5.45")) {
+			b5_45_keep_update();
+		}
+		if (MATCH_VERSION("b5.47")) {
+			b5_47_mine_update();
+		}
+		if (MATCH_VERSION("b5.48")) {
+			b5_48_rope_update();
+		}
+		if (MATCH_VERSION("b5.58")) {
+			b5_58_gather_totals();
+		}
+		if (MATCH_VERSION("b5.60")) {
+			log("Applying b5.60 channel update to players...");
+			update_all_players(NULL, b5_60_update_players);
+		}
+		if (MATCH_VERSION("b5.80")) {
+			b5_80_dailies_fix();
 		}
 	}
 	
@@ -2608,9 +3845,9 @@ void assign_old_workforce_chore(empire_data *emp, int chore) {
 		
 		// only bother if different from the last island found
 		map = &(world_map[MAP_X_COORD(trd->vnum)][MAP_Y_COORD(trd->vnum)]);
-		if (map->island != NO_ISLAND && last_isle != map->island) {
-			set_workforce_limit(emp, map->island, chore, WORKFORCE_UNLIMITED);
-			last_isle = map->island;
+		if (map->shared->island_id != NO_ISLAND && last_isle != map->shared->island_id) {
+			set_workforce_limit(emp, map->shared->island_id, chore, WORKFORCE_UNLIMITED);
+			last_isle = map->shared->island_id;
 		}
 	}
 }
@@ -2628,9 +3865,9 @@ void reset_time(void) {
 
 	time_info = *mud_time_passed(time(0), beginning_of_time);
 
-	if (time_info.hours <= 5)
+	if (time_info.hours <= 6)
 		weather_info.sunlight = SUN_DARK;
-	else if (time_info.hours == 6)
+	else if (time_info.hours == 7)
 		weather_info.sunlight = SUN_RISE;
 	else if (time_info.hours <= 18)
 		weather_info.sunlight = SUN_LIGHT;
@@ -2689,7 +3926,7 @@ void setup_start_locations(void) {
 	}
 
 	start_locs = new_start_locs;
-	num_of_start_locs = count;
+	highest_start_loc_index = count;
 }
 
 
@@ -2776,7 +4013,7 @@ void load_intro_screens(void) {
 
 	sprintf(lbuf, "%s%s", INTROS_PREFIX, INDEX_FILE);
 	if (!(index = fopen(lbuf, "r"))) {
-		log("SYSERR: opening index file '%s': %s", lbuf, strerror(errno));
+		log("SYSERR: Intro screens opening index file '%s': %s", lbuf, strerror(errno));
 		exit(1);
 	}
 

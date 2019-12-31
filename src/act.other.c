@@ -32,20 +32,35 @@
 *   Helpers
 *   Accept/Reject Helpers
 *   Alt Import
-*   Toggle Callbacks
+*   Toggle Functions
 *   Commands
 */
+
+// configs for mini-pets
+#define IS_MINIPET_OF(mob, ch)  (!EXTRACTED(mob) && IS_NPC(mob) && (mob)->master == (ch) && !MOB_FLAGGED((mob), MOB_FAMILIAR) && (MOB_FLAGS(mob) & default_minipet_flags) == default_minipet_flags && (AFF_FLAGS(mob) & default_minipet_affs) == default_minipet_affs)
+bitvector_t default_minipet_flags = MOB_SENTINEL | MOB_SPAWNED | MOB_NO_LOOT | MOB_NO_EXPERIENCE;
+bitvector_t default_minipet_affs = AFF_NO_ATTACK | AFF_CHARM;
+
+
+// external vars
+extern const struct toggle_data_type toggle_data[];	// constants.c
 
 // external prototypes
 extern bool can_enter_instance(char_data *ch, struct instance_data *inst);
 void check_delayed_load(char_data *ch);
 extern bool check_scaling(char_data *mob, char_data *attacker);
+extern struct instance_data *find_instance_by_room(room_data *room, bool check_homeroom, bool allow_fake_loc);
 extern struct instance_data *find_matching_instance_for_shared_quest(char_data *ch, any_vnum quest_vnum);
+void get_player_skill_string(char_data *ch, char *buffer, bool abbrev);
 extern char *get_room_name(room_data *room, bool color);
 extern char_data *has_familiar(char_data *ch);
+extern bool is_ignoring(char_data *ch, char_data *victim);
 void scale_item_to_level(obj_data *obj, int level);
 void scale_mob_as_familiar(char_data *mob, char_data *master);
 extern char *show_color_codes(char *string);
+
+// locals
+char_data *find_minipet(char_data *ch);
 
 
  //////////////////////////////////////////////////////////////////////////////
@@ -58,8 +73,6 @@ extern char *show_color_codes(char *string);
 * @param char *argument The typed argument.
 */
 void adventure_summon(char_data *ch, char *argument) {
-	extern struct instance_data *find_instance_by_room(room_data *room, bool check_homeroom);
-	
 	char arg[MAX_INPUT_LENGTH];
 	struct instance_data *inst;
 	char_data *vict;
@@ -67,9 +80,9 @@ void adventure_summon(char_data *ch, char *argument) {
 	one_argument(argument, arg);
 	
 	if (GET_POS(ch) < POS_STANDING) {
-		msg_to_char(ch, "You can't do that right now.\r\n");
+		send_low_pos_msg(ch);
 	}
-	else if (!(inst = find_instance_by_room(IN_ROOM(ch), FALSE))) {
+	else if (!(inst = find_instance_by_room(IN_ROOM(ch), FALSE, FALSE))) {
 		msg_to_char(ch, "You can only use the adventure summon command inside an adventure.\r\n");
 	}
 	else if (!can_use_room(ch, IN_ROOM(ch), GUESTS_ALLOWED)) {
@@ -117,7 +130,7 @@ void adventure_summon(char_data *ch, char *argument) {
 	else {
 		act("You start summoning $N...", FALSE, ch, NULL, vict, TO_CHAR);
 		act("$n starts summoning $N...", FALSE, ch, NULL, vict, TO_ROOM);
-		msg_to_char(vict, "%s is trying to summon you to %s (%s) -- use 'accept/reject summon'.\r\n", PERS(ch, ch, TRUE), GET_ADV_NAME(inst->adventure), get_room_name(IN_ROOM(ch), FALSE));
+		msg_to_char(vict, "%s is trying to summon you to %s (%s) -- use 'accept/reject summon'.\r\n", PERS(ch, ch, TRUE), GET_ADV_NAME(INST_ADVENTURE(inst)), get_room_name(IN_ROOM(ch), FALSE));
 		add_offer(vict, ch, OFFER_SUMMON, SUMMON_ADVENTURE);
 		command_lag(ch, WAIT_OTHER);
 	}
@@ -147,7 +160,7 @@ void adventure_unsummon(char_data *ch) {
 	
 	act("$n vanishes in a wisp of smoke!", TRUE, ch, NULL, NULL, TO_ROOM);
 	
-	if (room && map && map == get_map_location_for(room)) {
+	if (room && map && GET_ROOM_VNUM(map) == (GET_MAP_LOC(room) ? GET_MAP_LOC(room)->vnum : NOTHING)) {
 		char_to_room(ch, room);
 	}
 	else {
@@ -161,6 +174,8 @@ void adventure_unsummon(char_data *ch) {
 	
 	look_at_room(ch);
 	msg_to_char(ch, "\r\nYou have been returned to your original location after leaving the adventure.\r\n");
+	
+	msdp_update_room(ch);
 }
 
 
@@ -174,7 +189,171 @@ void cancel_adventure_summon(char_data *ch) {
 		REMOVE_BIT(PLR_FLAGS(ch), PLR_ADVENTURE_SUMMONED);
 		GET_ADVENTURE_SUMMON_RETURN_LOCATION(ch) = NOWHERE;
 		GET_ADVENTURE_SUMMON_RETURN_MAP(ch) = NOWHERE;
+		GET_ADVENTURE_SUMMON_INSTANCE_ID(ch) = NOTHING;
 	}
+}
+
+
+/**
+* Dismisses all mini-pets controlled by the character, if any.
+*
+* @param char_data *ch The player whose pet(s) to purge.
+* @return bool TRUE if it dismissed a minipet, FALSE if not.
+*/
+bool dismiss_any_minipet(char_data *ch) {
+	bool any = FALSE;
+	char_data *mob;
+	
+	while ((mob = find_minipet(ch))) {	// ensures there aren't more than 1
+		act("$n leaves.", TRUE, mob, NULL, NULL, TO_ROOM);
+		extract_char(mob);
+		any = TRUE;
+	}
+	
+	return any;
+}
+
+
+/**
+* called by do_customize
+*
+* @param char_data *ch The player.
+* @param char *argument Usage: name <new name | none>
+*/
+void do_customize_road(char_data *ch, char *argument) {
+	char arg2[MAX_STRING_LENGTH], *ptr;
+	empire_data *emp = GET_LOYALTY(ch);
+	bool found;
+	int iter;
+	
+	char *required_words[] = { "road", "avenue", "street", "way", "drive",
+		"grove", "lane", "gardens", "place", "circus", "crescent", "close",
+		"square", "hill", "mews", "vale", "rise", "row", "mead", "wharf",
+		"alley", "bend", "boulevard", "circle", "court", "course", "crossing",
+		"crossroad", "crossroads", "freeway", "lane", "loop", "pass",
+		"parkway", "plaza", "trail", "route", "skyway", "terrace", "track",
+		"trace", "tunnel", "turnpike", "bluff", "rd", "av", "ave", "st", "wy",
+		"dr", "blf", "blvd", "cir", "pkwy", "pathway", "path", "walkway", "walk",
+		"intersection", "fork", "corner", 
+		"\n"
+	};
+	
+	half_chop(argument, arg, arg2);
+	
+	if (!emp || ROOM_OWNER(IN_ROOM(ch)) != emp) {
+		msg_to_char(ch, "You must own the tile to do this.\r\n");
+	}
+	else if (!IS_ROAD(IN_ROOM(ch))) {
+		msg_to_char(ch, "This isn't a road (try customize building).\r\n");
+	}
+	else if (!has_permission(ch, PRIV_CUSTOMIZE, IN_ROOM(ch))) {
+		msg_to_char(ch, "You are not allowed to customize.\r\n");
+	}
+	else if (is_abbrev(arg, "name")) {
+		if (!*arg2) {
+			msg_to_char(ch, "What would you like to name this road (or \"none\")?\r\n");
+		}
+		else if (!str_cmp(arg2, "none")) {
+			if (ROOM_CUSTOM_NAME(IN_ROOM(ch))) {
+				free(ROOM_CUSTOM_NAME(IN_ROOM(ch)));
+				ROOM_CUSTOM_NAME(IN_ROOM(ch)) = NULL;
+			}
+			
+			msg_to_char(ch, "This road no longer has a custom name.\r\n");
+			command_lag(ch, WAIT_ABILITY);
+		}
+		else if (color_code_length(arg2) > 0) {
+			msg_to_char(ch, "You cannot use color codes in custom road names.\r\n");
+		}
+		else if (strlen(arg2) > 60) {
+			msg_to_char(ch, "That name is too long. Road names may not be over 60 characters.\r\n");
+		}
+		else {
+			// looks good, but check that it has a required word
+			found = FALSE;
+			for (iter = 0; *required_words[iter] != '\n' && !found; ++iter) {
+				if ((ptr = str_str(arg2, required_words[iter])) && ptr > arg2 && *(ptr-1) == ' ') {
+					// found it at the start of a word
+					found = TRUE;
+				}
+			}
+			if (!found) {
+				msg_to_char(ch, "The name must include a road name word like 'road' or 'drive'.\r\n");
+				return;
+			}
+			
+			if (ROOM_CUSTOM_NAME(IN_ROOM(ch))) {
+				free(ROOM_CUSTOM_NAME(IN_ROOM(ch)));
+			}
+			ROOM_CUSTOM_NAME(IN_ROOM(ch)) = str_dup(arg2);
+			
+			msg_to_char(ch, "This road tile is now called \"%s\".\r\n", arg2);
+			command_lag(ch, WAIT_ABILITY);
+		}
+	}
+	else {
+		msg_to_char(ch, "You can only customize the road's name.\r\n");
+	}
+}
+
+
+/**
+* Performs a douse on a torch/fire, if possible.
+*
+* @param char_data *ch The douser.
+* @param obj_data *obj The object to douse.
+* @param obj_data *cont The liquid container full of water.
+*/
+void do_douse_obj(char_data *ch, obj_data *obj, obj_data *cont) {
+	if (!OBJ_FLAGGED(obj, OBJ_LIGHT)) {
+		msg_to_char(ch, "You can't douse that -- it's not a light or fire.\r\n");
+	}
+	else if (GET_OBJ_TIMER(obj) == UNLIMITED) {
+		act("You can't seem to douse $p.", FALSE, ch, obj, NULL, TO_CHAR);
+	}
+	else if (IN_ROOM(obj) && !can_use_room(ch, IN_ROOM(ch), GUESTS_ALLOWED)) {
+		msg_to_char(ch, "You can't douse anything here.\r\n");
+	}
+	else {
+		GET_OBJ_VAL(cont, VAL_DRINK_CONTAINER_CONTENTS) = 0;
+		
+		act("You douse $p with $P.", FALSE, ch, obj, cont, TO_CHAR);
+		act("$n douses $p with $P.", FALSE, ch, obj, cont, TO_ROOM);
+		
+		// run the timer trigger, same as if it timed out
+		if (timer_otrigger(obj)) {
+			extract_obj(obj);	// unless prevented by the trigger
+		}
+	}
+}
+
+
+/**
+* Finds a mini-pet belonging to the character, if any.
+*
+* @param char_data *ch The player whose pet to look for.
+* @return char_data* The found mini-pet, if any.
+*/
+char_data *find_minipet(char_data *ch) {
+	char_data *chiter, *found = NULL;
+	
+	// try the room first
+	LL_FOREACH2(ROOM_PEOPLE(IN_ROOM(ch)), chiter, next_in_room) {
+		if (IS_MINIPET_OF(chiter, ch)) {
+			found = chiter;
+			break;
+		}
+	}
+	if (!found) {
+		LL_FOREACH(character_list, chiter) {
+			if (IS_MINIPET_OF(chiter, ch)) {
+				found = chiter;
+				break;
+			}
+		}
+	}
+	
+	return found;	// if any
 }
 
 
@@ -201,7 +380,7 @@ void perform_alternate(char_data *old, char_data *new) {
 	empire_data *old_emp;
 	
 	if (!old || !new || !old->desc || new->desc) {
-		log("SYSERR: Attempting invalid peform_alternate with %s, %s, %s, %s", old ? "ok" : "no old", new ? "ok" : "no new", old->desc ? "ok" : "no old desc", new->desc ? "new desc" : "ok");
+		log("SYSERR: Attempting invalid perform_alternate with %s, %s, %s, %s", old ? "ok" : "no old", new ? "ok" : "no new", old->desc ? "ok" : "no old desc", new->desc ? "new desc" : "ok");
 		return;
 	}
 
@@ -221,7 +400,7 @@ void perform_alternate(char_data *old, char_data *new) {
 	old_emp = GET_LOYALTY(old);
 	
 	// prepare logs
-	snprintf(sys, sizeof(sys), "%s used alternate to switch to %s.", GET_NAME(old), GET_NAME(new));
+	snprintf(sys, sizeof(sys), "%s used alternate to switch to %s at %s.", GET_NAME(old), GET_NAME(new), IN_ROOM(old) ? room_log_identifier(IN_ROOM(old)) : "an unknown location");
 
 	strcpy(temp, PERS(new, new, TRUE));
 	snprintf(mort_alt, sizeof(mort_alt), "%s has switched to %s", PERS(old, old, TRUE), temp);
@@ -236,6 +415,7 @@ void perform_alternate(char_data *old, char_data *new) {
 	// save old char...
 	GET_LAST_KNOWN_LEVEL(old) = GET_COMPUTED_LEVEL(old);
 	SAVE_CHAR(old);
+	dismiss_any_minipet(old);
 	
 	// save this to switch over replies
 	last_tell = GET_LAST_TELL(old);
@@ -335,7 +515,7 @@ static void print_group(char_data *ch) {
 	extern const char *class_role[];
 	extern const char *pool_abbrevs[];
 
-	char status[256], class[256], loc[256], alerts[256];
+	char status[256], class[256], loc[256], alerts[256], skills[256];
 	struct group_member_data *mem;
 	int iter, ssize;
 	char_data *k;
@@ -356,7 +536,8 @@ static void print_group(char_data *ch) {
 			
 			// show class section if they have one
 			if (!IS_NPC(k) && GET_CLASS(k)) {
-				snprintf(class, sizeof(class), "/%s/%s", SHOW_CLASS_NAME(k), class_role[(int) GET_CLASS_ROLE(k)]);
+				get_player_skill_string(k, skills, TRUE);
+				snprintf(class, sizeof(class), "/%s/%s", skills, class_role[(int) GET_CLASS_ROLE(k)]);
 			}
 			else {
 				*class = '\0';
@@ -370,8 +551,8 @@ static void print_group(char_data *ch) {
 			
 			// show location if different
 			if (IN_ROOM(k) != IN_ROOM(ch)) {
-				if (has_ability(ch, ABIL_NAVIGATION) && !RMT_FLAGGED(IN_ROOM(k), RMT_NO_LOCATION) && (IS_NPC(k) || has_ability(k, ABIL_NAVIGATION)) && X_COORD(IN_ROOM(k)) >= 0) {
-					snprintf(loc, sizeof(loc), " - %s (%d, %d)", get_room_name(IN_ROOM(k), FALSE), X_COORD(IN_ROOM(k)), Y_COORD(IN_ROOM(k)));
+				if (HAS_NAVIGATION(ch) && (IS_NPC(k) || HAS_NAVIGATION(k))) {
+					snprintf(loc, sizeof(loc), " - %s%s", get_room_name(IN_ROOM(k), FALSE), coord_display_room(ch, IN_ROOM(k), FALSE));
 				}
 				else {
 					snprintf(loc, sizeof(loc), " - %s", get_room_name(IN_ROOM(k), FALSE));
@@ -400,7 +581,7 @@ INTERACTION_FUNC(shear_interact) {
 	command_lag(ch, WAIT_OTHER);
 			
 	amt = interaction->quantity;
-	if (has_ability(ch, ABIL_MASTER_FARMER)) {
+	if (has_player_tech(ch, PTECH_SHEAR_UPGRADE)) {
 		amt *= 2;
 	}
 	
@@ -408,6 +589,11 @@ INTERACTION_FUNC(shear_interact) {
 		obj = read_object(interaction->vnum, TRUE);
 		obj_to_char(obj, ch);
 		load_otrigger(obj);
+	}
+	
+	// mark gained
+	if (GET_LOYALTY(ch)) {
+		add_production_total(GET_LOYALTY(ch), interaction->vnum, amt);
 	}
 	
 	// only show loot to the skinner
@@ -433,15 +619,21 @@ INTERACTION_FUNC(skin_interact) {
 	char buf[MAX_STRING_LENGTH];
 	obj_data *obj = NULL;
 	int num;
-
-	SET_BIT(GET_OBJ_VAL(inter_item, VAL_CORPSE_FLAGS), CORPSE_SKINNED);
-	command_lag(ch, WAIT_OTHER);
+	
+	if (!has_player_tech(ch, PTECH_SKINNING_UPGRADE) && number(1, 100) > 60) {
+		return FALSE;	// 60% failure unskilled
+	}
 		
 	for (num = 0; num < interaction->quantity; ++num) {
 		obj = read_object(interaction->vnum, TRUE);
 		scale_item_to_level(obj, 1);	// min scale
 		obj_to_char(obj, ch);
 		load_otrigger(obj);
+	}
+	
+	// mark gained
+	if (GET_LOYALTY(ch)) {
+		add_production_total(GET_LOYALTY(ch), interaction->vnum, interaction->quantity);
 	}
 	
 	// only show loot to the skinner
@@ -525,12 +717,7 @@ void summon_player(char_data *ch, char *argument) {
 		}
 		
 		act("You start summoning $N...", FALSE, ch, NULL, vict, TO_CHAR);
-		if (has_ability(vict, ABIL_NAVIGATION)) {
-			snprintf(buf, sizeof(buf), "$o is trying to summon you to %s (%d, %d) -- use 'accept/reject summon'.", get_room_name(IN_ROOM(ch), FALSE), X_COORD(IN_ROOM(ch)), Y_COORD(IN_ROOM(ch)));
-		}
-		else {
-			snprintf(buf, sizeof(buf), "$o is trying to summon you to %s -- use 'accept/reject summon'.", get_room_name(IN_ROOM(ch), FALSE));
-		}
+		snprintf(buf, sizeof(buf), "$o is trying to summon you to %s%s -- use 'accept/reject summon'.", get_room_name(IN_ROOM(ch), FALSE), coord_display_room(ch, IN_ROOM(ch), FALSE));
 		act(buf, FALSE, ch, NULL, vict, TO_VICT | TO_SLEEP);
 		add_offer(vict, ch, OFFER_SUMMON, SUMMON_PLAYER);
 		command_lag(ch, WAIT_OTHER);
@@ -673,14 +860,17 @@ OFFER_VALIDATE(oval_summon) {
 }
 
 OFFER_FINISH(ofin_summon) {
-	room_data *loc = real_room(offer->location), *map;
+	room_data *loc = real_room(offer->location);
+	struct instance_data *inst;
 	int type = offer->data;
+	struct map_data *map;
 	
 	if (type == SUMMON_ADVENTURE) {
 		SET_BIT(PLR_FLAGS(ch), PLR_ADVENTURE_SUMMONED);
 		GET_ADVENTURE_SUMMON_RETURN_LOCATION(ch) = GET_ROOM_VNUM(IN_ROOM(ch));
-		map = get_map_location_for(IN_ROOM(ch));
-		GET_ADVENTURE_SUMMON_RETURN_MAP(ch) = map ? GET_ROOM_VNUM(map) : NOWHERE;
+		GET_ADVENTURE_SUMMON_INSTANCE_ID(ch) = (inst = find_instance_by_room(loc, FALSE, FALSE)) ? INST_ID(inst) : NOTHING;
+		map = GET_MAP_LOC(IN_ROOM(ch));
+		GET_ADVENTURE_SUMMON_RETURN_MAP(ch) = map ? map->vnum : NOWHERE;
 	}
 	else {
 		// if they accept a normal summon out of an adventure, cancel their group summon
@@ -695,6 +885,13 @@ OFFER_FINISH(ofin_summon) {
 	qt_visit_room(ch, IN_ROOM(ch));
 	look_at_room(ch);
 	act("$n appears in a swirl of light!", TRUE, ch, NULL, NULL, TO_ROOM);
+	
+	enter_wtrigger(IN_ROOM(ch), ch, NO_DIR);
+	entry_memory_mtrigger(ch);
+	greet_mtrigger(ch, NO_DIR);
+	greet_memory_mtrigger(ch);
+	greet_vtrigger(ch, NO_DIR);
+	msdp_update_room(ch);	// once we're sure we're staying
 	
 	return TRUE;
 }
@@ -836,7 +1033,7 @@ void alt_import_preferences(char_data *ch, char_data *alt) {
 	bitvector_t set;
 	
 	// prf flags to import
-	bitvector_t prfs = PRF_COMPACT | PRF_DEAF | PRF_NOTELL | PRF_MORTLOG | PRF_NOREPEAT | PRF_NOMAPCOL | PRF_NO_CHANNEL_JOINS | PRF_SCROLLING | PRF_BRIEF | PRF_AUTORECALL | PRF_NOSPAM | PRF_SCREEN_READER;
+	bitvector_t prfs = PRF_COMPACT | PRF_DEAF | PRF_NOTELL | PRF_MORTLOG | PRF_NOREPEAT | PRF_NOMAPCOL | PRF_NO_CHANNEL_JOINS | PRF_SCROLLING | PRF_BRIEF | PRF_AUTORECALL | PRF_NOSPAM | PRF_SCREEN_READER | PRF_AUTOKILL | PRF_AUTODISMOUNT | PRF_NOEMPIRE | PRF_CLEARMETERS | PRF_NO_PAINT | PRF_EXTRA_SPACING | PRF_TRAVEL_LOOK | PRF_AUTOCLIMB | PRF_AUTOSWIM;
 	
 	// add flags
 	set = PRF_FLAGS(alt) & prfs;
@@ -946,8 +1143,7 @@ void do_alt_import(char_data *ch, char *argument) {
 	
 	// validate
 	if (!*arg1 || !*arg2) {
-		msg_to_char(ch, "Usage: alt import <name> <field | all>\r\n");
-		msg_to_char(ch, valid_fields);
+		msg_to_char(ch, "Usage: alt import <name> <field | all>\r\n%s", valid_fields);
 	}
 	else if (!(alt = find_or_load_player(arg1, &file))) {
 		msg_to_char(ch, "Unknown alt '%s'.\r\n", arg1);
@@ -994,8 +1190,7 @@ void do_alt_import(char_data *ch, char *argument) {
 		alt_import_slash_channels(ch, alt);
 	}
 	else {
-		msg_to_char(ch, "Uknown field '%s'.\r\n", arg2);
-		msg_to_char(ch, valid_fields);
+		msg_to_char(ch, "Unknown field '%s'.\r\n%s", arg2, valid_fields);
 	}
 
 	// cleanup	
@@ -1006,7 +1201,48 @@ void do_alt_import(char_data *ch, char *argument) {
 
 
  //////////////////////////////////////////////////////////////////////////////
-//// TOGGLE CALLBACKS ////////////////////////////////////////////////////////
+//// TOGGLE FUNCTIONS ////////////////////////////////////////////////////////
+
+// for alphabetizing toggles for screenreader users
+struct alpha_tog {
+	char *name;
+	int pos;
+	int level;
+	struct alpha_tog *next;
+};
+
+struct alpha_tog *alpha_tog_list = NULL;	// LL of alphabetized toggles
+
+
+// alphabetizes the toggle list (after sorting by level)
+int sort_alpha_toggles(struct alpha_tog *a, struct alpha_tog *b) {
+	if (a->level != b->level) {
+		return a->level - b->level;
+	}
+	return str_cmp(a->name, b->name);
+}
+
+
+// ensures there is an alphabetized list of toggles, for screenreader users
+void alphabetize_toggles(void) {
+	struct alpha_tog *el;
+	int iter;
+	
+	if (alpha_tog_list) {
+		return;	// no work (do 1 time only)
+	}
+	
+	for (iter = 0; *toggle_data[iter].name != '\n'; ++iter) {
+		CREATE(el, struct alpha_tog, 1);
+		el->name = str_dup(toggle_data[iter].name);
+		el->level = toggle_data[iter].level;
+		el->pos = iter;
+		LL_PREPEND(alpha_tog_list, el);
+	}
+	
+	LL_SORT(alpha_tog_list, sort_alpha_toggles);
+}
+
 
 /**
 * toggle notifier for "toggle afk"
@@ -1030,7 +1266,10 @@ void afk_notify(char_data *ch) {
 */
 void tog_informative(char_data *ch) {
 	if (PRF_FLAGGED(ch, PRF_INFORMATIVE)) {
-		REMOVE_BIT(PRF_FLAGS(ch), PRF_POLITICAL | PRF_NOMAPCOL);
+		REMOVE_BIT(PRF_FLAGS(ch), PRF_POLITICAL);
+		if (!PRF_FLAGGED(ch, PRF_SCREEN_READER)) {
+			REMOVE_BIT(PRF_FLAGS(ch), PRF_NOMAPCOL);
+		}
 	}
 }
 
@@ -1041,7 +1280,7 @@ void tog_informative(char_data *ch) {
 * @param char_data *ch The player.
 */
 void tog_mapcolor(char_data *ch) {
-	if (PRF_FLAGGED(ch, PRF_NOMAPCOL)) {
+	if (PRF_FLAGGED(ch, PRF_NOMAPCOL) && !PRF_FLAGGED(ch, PRF_SCREEN_READER)) {
 		REMOVE_BIT(PRF_FLAGS(ch), PRF_POLITICAL | PRF_INFORMATIVE);
 	}
 }
@@ -1054,10 +1293,24 @@ void tog_mapcolor(char_data *ch) {
 */
 void tog_political(char_data *ch) {
 	if (PRF_FLAGGED(ch, PRF_POLITICAL)) {
-		REMOVE_BIT(PRF_FLAGS(ch), PRF_INFORMATIVE | PRF_NOMAPCOL);
+		REMOVE_BIT(PRF_FLAGS(ch), PRF_INFORMATIVE);
+		if (!PRF_FLAGGED(ch, PRF_SCREEN_READER)) {
+			REMOVE_BIT(PRF_FLAGS(ch), PRF_NOMAPCOL);
+		}
 	}
 }
 
+
+/**
+* Sets the pvp cooldown if needed.
+*
+* @param char_data *ch The player.
+*/
+void tog_pvp(char_data *ch) {
+	if (!PRF_FLAGGED(ch, PRF_ALLOW_PVP)) {
+		add_cooldown(ch, COOLDOWN_PVP_FLAG, config_get_int("pvp_timer") * SECS_PER_REAL_MIN);
+	}
+}
 
 
  //////////////////////////////////////////////////////////////////////////////
@@ -1175,7 +1428,7 @@ ACMD(do_accept) {
 		return;
 	}
 	if (GET_POS(ch) < offer_types[type].min_pos) {
-		msg_to_char(ch, "You can't do that right now.\r\n");
+		send_low_pos_msg(ch);
 		return;
 	}
 	
@@ -1207,11 +1460,12 @@ ACMD(do_accept) {
 
 ACMD(do_alternate) {
 	extern int isbanned(char *hostname);
+	extern bool has_anonymous_host(descriptor_data *desc);
 	extern bool member_is_timed_out_ch(char_data *ch);
 	extern const char *class_role[];
 	extern const char *class_role_color[];
 
-	char arg[MAX_INPUT_LENGTH], buf[MAX_STRING_LENGTH];
+	char arg[MAX_INPUT_LENGTH], buf[MAX_STRING_LENGTH], part[MAX_STRING_LENGTH];
 	struct account_player *plr;
 	player_index_data *index;
 	char_data *newch, *alt;
@@ -1247,11 +1501,12 @@ ACMD(do_alternate) {
 		
 			// display:
 			timed_out = member_is_timed_out_ch(alt);
+			get_player_skill_string(alt, part, TRUE);
 			if (PRF_FLAGGED(ch, PRF_SCREEN_READER)) {
-				size += snprintf(buf + size, sizeof(buf) - size, "[%d %s %s] %s%s&0", !is_file ? GET_COMPUTED_LEVEL(alt) : GET_LAST_KNOWN_LEVEL(alt), SHOW_CLASS_NAME(alt), class_role[GET_CLASS_ROLE(alt)], (timed_out ? "&r" : ""), PERS(alt, alt, TRUE));
+				size += snprintf(buf + size, sizeof(buf) - size, "[%d %s %s] %s%s&0", !is_file ? GET_COMPUTED_LEVEL(alt) : GET_LAST_KNOWN_LEVEL(alt), part, class_role[GET_CLASS_ROLE(alt)], (timed_out ? "&r" : ""), PERS(alt, alt, TRUE));
 			}
 			else {	// not screenreader
-				size += snprintf(buf + size, sizeof(buf) - size, "[%d %s%s\t0] %s%s&0", !is_file ? GET_COMPUTED_LEVEL(alt) : GET_LAST_KNOWN_LEVEL(alt), class_role_color[GET_CLASS_ROLE(alt)], SHOW_CLASS_NAME(alt), (timed_out ? "&r" : ""), PERS(alt, alt, TRUE));
+				size += snprintf(buf + size, sizeof(buf) - size, "[%d %s%s\t0] %s%s&0", !is_file ? GET_COMPUTED_LEVEL(alt) : GET_LAST_KNOWN_LEVEL(alt), class_role_color[GET_CLASS_ROLE(alt)], part, (timed_out ? "&r" : ""), PERS(alt, alt, TRUE));
 			}
 						
 			// online/not
@@ -1326,6 +1581,10 @@ ACMD(do_alternate) {
 			msg_to_char(ch, "You can't switch to that character because someone is already playing it.\r\n");
 			return;
 		}
+		if (IS_APPROVED(newch) && has_anonymous_host(ch->desc)) {
+			msg_to_char(ch, "You can't switch to an approved character from an anonymous public host.\r\n");
+			return;
+		}
 		
 		// seems ok
 		perform_alternate(ch, newch);
@@ -1362,6 +1621,60 @@ ACMD(do_alternate) {
 		
 		// seems ok!
 		perform_alternate(ch, newch);
+	}
+}
+
+
+ACMD(do_beckon) {
+	char arg[MAX_INPUT_LENGTH];
+	char_data *vict;
+	bool any;
+	
+	one_argument(argument, arg);
+	if (!*arg || !str_cmp(arg, "all")) {
+		any = FALSE;
+		// beckon all
+		LL_FOREACH2(ROOM_PEOPLE(IN_ROOM(ch)), vict, next_in_room) {
+			if (vict == ch || is_ignoring(vict, ch) || vict->master) {
+				continue;	// nopes
+			}
+			
+			if (!IS_NPC(vict)) {
+				GET_BECKONED_BY(vict) = GET_IDNUM(REAL_CHAR(ch));	// real: may be switched imm
+			}
+			any = TRUE;
+		}
+		
+		if (any) {
+			msg_to_char(ch, "You beckon for everyone to follow you.\r\n");
+			act("$n beckons for everyone to follow $m.", FALSE, ch, NULL, NULL, TO_ROOM);
+		}
+		else {
+			msg_to_char(ch, "There is nobody here to beckon.\r\n");
+		}
+	}
+	else if (!(vict = get_char_room_vis(ch, arg))) {
+		send_config_msg(ch, "no_person");
+	}
+	else if (!IS_NPC(vict) && GET_BECKONED_BY(vict) == GET_IDNUM(REAL_CHAR(ch))) {
+		act("You already beckoned $M.", FALSE, ch, NULL, vict, TO_CHAR);
+	}
+	else if (!IS_NPC(vict) && is_ignoring(vict, ch)) {
+		act("You can't beckon $M.", FALSE, ch, NULL, vict, TO_CHAR);
+	}
+	else if (vict->master == ch) {
+		act("$E is already following you.", FALSE, ch, NULL, vict, TO_CHAR);
+	}
+	else if (vict->master) {
+		act("$E is already following someone else.", FALSE, ch, NULL, vict, TO_CHAR);
+	}
+	else {
+		if (!IS_NPC(vict)) {
+			GET_BECKONED_BY(vict) = GET_IDNUM(REAL_CHAR(ch));	// real: may be switched imm
+		}
+		act("You beckon for $N to follow you.", FALSE, ch, NULL, vict, TO_CHAR);
+		act("$n beckons for you to follow $m.", FALSE, ch, NULL, vict, TO_VICT);
+		act("$n beckons for $N to follow $m.", FALSE, ch, NULL, vict, TO_NOTVICT);
 	}
 }
 
@@ -1460,6 +1773,9 @@ ACMD(do_customize) {
 	else if (is_abbrev(arg, "vehicle") || is_abbrev(arg, "ship")) {
 		do_customize_vehicle(ch, arg2);
 	}
+	else if (is_abbrev(arg, "road")) {
+		do_customize_road(ch, arg2);
+	}
 	else {
 		msg_to_char(ch, "What do you want to customize? (See HELP CUSTOMIZE)\r\n");
 	}
@@ -1485,11 +1801,20 @@ ACMD(do_dismiss) {
 			send_config_msg(ch, "ok_string");
 		}
 	}
+	else if (!strn_cmp(arg, "mini", 4) && (is_abbrev(arg, "minipet") || is_abbrev(arg, "mini-pet"))) {
+		// requires abbrev of at least "famil"
+		if (!dismiss_any_minipet(ch)) {
+			msg_to_char(ch, "You do not have a mini-pet to dismiss.\r\n");
+		}
+		else {
+			send_config_msg(ch, "ok_string");
+		}
+	}
 	else if (!(vict = get_char_vis(ch, arg, FIND_CHAR_ROOM))) {
 		send_config_msg(ch, "no_person");
 	}
-	else if (!IS_NPC(vict) || vict->master != ch || !MOB_FLAGGED(vict, MOB_FAMILIAR)) {
-		msg_to_char(ch, "You can only dismiss a familiar.\r\n");
+	else if (!IS_NPC(vict) || vict->master != ch || (!MOB_FLAGGED(vict, MOB_FAMILIAR) && !IS_MINIPET_OF(vict, ch))) {
+		msg_to_char(ch, "You can only dismiss a familiar or mini-pet.\r\n");
 	}
 	else if (FIGHTING(vict) || GET_POS(vict) < POS_SLEEPING) {
 		act("You can't dismiss $M right now.", FALSE, ch, NULL, vict, TO_CHAR);
@@ -1503,15 +1828,14 @@ ACMD(do_dismiss) {
 
 ACMD(do_douse) {
 	void do_douse_vehicle(char_data *ch, vehicle_data *veh, obj_data *cont);
+	void stop_burning(room_data *room);
 	
 	room_data *room = HOME_ROOM(IN_ROOM(ch));
-	obj_data *obj = NULL, *iter;
+	obj_data *obj = NULL, *found_obj = NULL, *iter;
 	char arg[MAX_INPUT_LENGTH];
 	vehicle_data *veh;
 	byte amount;
 	
-	int fire_extinguish_value = config_get_int("fire_extinguish_value");
-
 	// this loop finds a water container and sets obj
 	LL_FOREACH2(ch->carrying, iter, next_content) {
 		if (GET_DRINK_CONTAINER_TYPE(iter) == LIQ_WATER && GET_DRINK_CONTAINER_CONTENTS(iter) > 0) {
@@ -1533,6 +1857,9 @@ ACMD(do_douse) {
 		else if (GET_ROOM_VEHICLE(IN_ROOM(ch)) && isname(arg, VEH_KEYWORDS(GET_ROOM_VEHICLE(IN_ROOM(ch))))) {
 			do_douse_vehicle(ch, GET_ROOM_VEHICLE(IN_ROOM(ch)), obj);
 		}
+		else if ((found_obj = get_obj_in_list_vis(ch, arg, ch->carrying)) || (found_obj = get_obj_in_list_vis(ch, arg, ROOM_CONTENTS(IN_ROOM(ch))))) {
+			do_douse_obj(ch, found_obj, obj);
+		}
 		else {
 			msg_to_char(ch, "You don't see %s %s to douse!\r\n", AN(arg), arg);
 		}
@@ -1540,19 +1867,19 @@ ACMD(do_douse) {
 	else if (GET_ROOM_VEHICLE(IN_ROOM(ch)) && VEH_FLAGGED(GET_ROOM_VEHICLE(IN_ROOM(ch)), VEH_ON_FIRE)) {
 		do_douse_vehicle(ch, GET_ROOM_VEHICLE(IN_ROOM(ch)), obj);
 	}
-	else if (!IS_ANY_BUILDING(IN_ROOM(ch)) || !BUILDING_BURNING(room))
+	else if (!IS_ANY_BUILDING(IN_ROOM(ch)) || !IS_BURNING(room))
 		msg_to_char(ch, "There's no fire here!\r\n");
 	else {
 		amount = GET_DRINK_CONTAINER_CONTENTS(obj);
 		GET_OBJ_VAL(obj, VAL_DRINK_CONTAINER_CONTENTS) = 0;
-
-		COMPLEX_DATA(room)->burning = MIN(fire_extinguish_value, BUILDING_BURNING(room) + amount);
+		
+		add_to_room_extra_data(room, ROOM_EXTRA_FIRE_REMAINING, -amount);
 		act("You throw some water from $p onto the flames!", FALSE, ch, obj, 0, TO_CHAR);
 		act("$n throws some water from $p onto the flames!", FALSE, ch, obj, 0, TO_ROOM);
 
-		if (BUILDING_BURNING(room) >= fire_extinguish_value) {
+		if (get_room_extra_data(room, ROOM_EXTRA_FIRE_REMAINING) <= 0) {
 			act("The flames have been extinguished!", FALSE, ch, 0, 0, TO_CHAR | TO_ROOM);
-			COMPLEX_DATA(room)->burning = 0;
+			stop_burning(room);
 		}
 	}
 }
@@ -1723,7 +2050,7 @@ ACMD(do_group) {
 
 	// no-arg
 	if (!*buf) {
-		msg_to_char(ch, "Available group options: invite, join, kick, leave, leader\r\n");
+		msg_to_char(ch, "Available group options: new, invite, join, kick, leave, leader\r\n");
 		
 		if (GROUP(ch)) {
 			// should we replace this with the group summary? -pc
@@ -1761,6 +2088,10 @@ ACMD(do_group) {
 			msg_to_char(ch, "You can't invite NPCs to a group.\r\n");
 			return;
 		}
+		else if (is_ignoring(vict, ch)) {
+			msg_to_char(ch, "You can't invite someone who is ignoring you to a group.\r\n");
+			return;
+		}
 		else if (GROUP(vict)) {
 			msg_to_char(ch, "Your target is already in a group.\r\n");
 			return;
@@ -1785,6 +2116,10 @@ ACMD(do_group) {
 		}
 		
 		GET_GROUP_INVITE(vict) = GET_IDNUM(ch);
+		if (!vict->master) {
+			// auto-beckon
+			GET_BECKONED_BY(vict) = GET_IDNUM(REAL_CHAR(ch));
+		}
 	}
 	else if (is_abbrev(buf, "join")) {
 		if (!(vict = is_playing(GET_GROUP_INVITE(ch)))) {
@@ -1889,16 +2224,16 @@ ACMD(do_group) {
 			msg_to_char(ch, "The flag options are: anonymous\r\n");
 	}
 	else {
-		msg_to_char(ch, "You must specify a group option, or type HELP GROUP for more info.\r\n");		
+		msg_to_char(ch, "Invalid group option. See HELP GROUP for more info.\r\n");		
 	}
 }
 
 
 ACMD(do_herd) {
-	extern int perform_move(char_data *ch, int dir, int need_specials_check, byte mode);
+	extern int perform_move(char_data *ch, int dir, bitvector_t flags);
 	extern const int rev_dir[];
 
-	struct room_direction_data *ex;
+	struct room_direction_data *ex = NULL;
 	char_data *victim;
 	int dir;
 	room_data *to_room, *was_in;
@@ -1907,6 +2242,9 @@ ACMD(do_herd) {
 
 	if (IS_NPC(ch))
 		return;
+	else if (!has_player_tech(ch, PTECH_HERD)) {
+		msg_to_char(ch, "You don't have the correct ability to herd animals.\r\n");
+	}
 	else if (IS_ADVENTURE_ROOM(IN_ROOM(ch))) {
 		msg_to_char(ch, "You can't herd anything in an adventure.\r\n");
 	}
@@ -1942,20 +2280,21 @@ ACMD(do_herd) {
 		msg_to_char(ch, "You can't herd someone who is being led by someone else.\r\n");
 	else if (ROOM_IS_CLOSED(to_room) && !ROOM_BLD_FLAGGED(to_room, BLD_HERD))
 		msg_to_char(ch, "You can't herd an animal into a building.\r\n");
-	else if (ROOM_IS_CLOSED(to_room) && !IS_INSIDE(IN_ROOM(ch)) && BUILDING_ENTRANCE(to_room) != dir && (!ROOM_BLD_FLAGGED(to_room, BLD_TWO_ENTRANCES) || BUILDING_ENTRANCE(to_room) != rev_dir[dir])) {
+	else if (ROOM_IS_CLOSED(to_room) && (!ex || !CAN_GO(ch, ex)) && !IS_INSIDE(IN_ROOM(ch)) && BUILDING_ENTRANCE(to_room) != dir && (!ROOM_BLD_FLAGGED(to_room, BLD_TWO_ENTRANCES) || BUILDING_ENTRANCE(to_room) != rev_dir[dir])) {
 		msg_to_char(ch, "You can only herd an animal through the entrance.\r\n");
 	}
 	else {
 		was_in = IN_ROOM(ch);
 		
-		if (perform_move(victim, dir, TRUE, 0)) {
+		if (perform_move(victim, dir, MOVE_HERD)) {
 			act("You skillfully herd $N.", FALSE, ch, 0, victim, TO_CHAR);
 			act("$n skillfully herds $N.", FALSE, ch, 0, victim, TO_ROOM);
 			
 			// only attempt to move ch if they weren't moved already (e.g. by following)
-			if (IN_ROOM(ch) == was_in && !perform_move(ch, dir, FALSE, 0)) {
+			if (IN_ROOM(ch) == was_in && !perform_move(ch, dir, NOBITS)) {
 				char_to_room(victim, IN_ROOM(ch));
 			}
+			gain_player_tech_exp(ch, PTECH_HERD, 5);
 		}
 		else {
 			act("You try to herd $N, but $E refuses to move!", FALSE, ch, 0, victim, TO_CHAR);
@@ -1972,7 +2311,10 @@ ACMD(do_milk) {
 
 	two_arguments(argument, arg, buf);
 
-	if (!room_has_function_and_city_ok(IN_ROOM(ch), FNC_STABLE))
+	if (!has_player_tech(ch, PTECH_MILK)) {
+		msg_to_char(ch, "You don't have the correct ability to milk animals.\r\n");
+	}
+	else if (!room_has_function_and_city_ok(IN_ROOM(ch), FNC_STABLE))
 		msg_to_char(ch, "You can't milk animals here!\r\n");
 	else if (!IS_COMPLETE(IN_ROOM(ch))) {
 		msg_to_char(ch, "You need to finish building the stable before you can milk anything.\r\n");
@@ -2003,6 +2345,119 @@ ACMD(do_milk) {
 		GET_OBJ_VAL(cont, VAL_DRINK_CONTAINER_CONTENTS) += amount;
 		GET_OBJ_VAL(cont, VAL_DRINK_CONTAINER_TYPE) = LIQ_MILK;
 		GET_OBJ_TIMER(cont) = 72;	// mud hours
+		gain_player_tech_exp(ch, PTECH_MILK, 33);
+	}
+}
+
+
+ACMD(do_minipets) {
+	char output[MAX_STRING_LENGTH * 2], line[MAX_STRING_LENGTH];
+	struct minipet_data *mini, *next_mini;
+	char_data *mob, *to_summon;
+	size_t size, count;
+	
+	skip_spaces(&argument);
+	
+	if (IS_NPC(ch)) {
+		msg_to_char(ch, "Mobs don't get mini-pets.\r\n");
+		return;
+	}
+	if (!ch->desc) {
+		return;	// no point, nothing to show
+	}
+	
+	if (!*argument) {	// just list minipets
+		size = snprintf(output, sizeof(output), "Mini-pets in your collection:\r\n");
+		count = 0;
+	
+		HASH_ITER(hh, GET_MINIPETS(ch), mini, next_mini) {
+			if (!(mob = mob_proto(mini->vnum))) {
+				continue;	// no mob
+			}
+		
+			// ok:
+			++count;
+		
+			if (PRF_FLAGGED(ch, PRF_SCREEN_READER)) {
+				snprintf(line, sizeof(line), "%s\r\n", skip_filler(GET_SHORT_DESC(mob)));
+			}
+			else {	// non-screenreader
+				snprintf(line, sizeof(line), " %-36.36s%s", skip_filler(GET_SHORT_DESC(mob)), !(count % 2) ? "\r\n" : "");
+			}
+		
+			if (size + strlen(line) + 14 < sizeof(output)) {
+				strcat(output, line);
+				size += strlen(line);
+			}
+			else {
+				strcat(output, "OVERFLOW\r\n");	// 10 characters always reserved
+				break;
+			}
+		}
+	
+		if (count == 0) {
+			strcat(output, " none\r\n");	// space always reserved for this
+		}
+		else if (!PRF_FLAGGED(ch, PRF_SCREEN_READER) && (count % 2)) {
+			strcat(output, "\r\n");	// space always reserved for this
+		}
+	
+		if (ch->desc) {
+			page_string(ch->desc, output, TRUE);
+		}
+	}	// end no-arg
+	else if (GET_POS(ch) < POS_STANDING) {
+		send_low_pos_msg(ch);	// must be standing to do the rest
+	}
+	else if (is_abbrev(argument, "dismiss")) {
+		if (!(mob = find_minipet(ch))) {
+			msg_to_char(ch, "You don't seem to have a mini-pet to dismiss.\r\n");
+		}
+		else {
+			msg_to_char(ch, "You dismiss your mini-pet.\r\n");
+			dismiss_any_minipet(ch);
+		}
+	}
+	else {
+		to_summon = NULL;	// to find
+		HASH_ITER(hh, GET_MINIPETS(ch), mini, next_mini) {
+			if (!(mob = mob_proto(mini->vnum))) {
+				continue;	// no mob
+			}
+			else if (!multi_isname(argument, GET_PC_NAME(mob))) {
+				continue;	// no match
+			}
+			else {
+				to_summon = mob;
+				break;	// FOUND!
+			}
+		}
+		
+		if (!to_summon) {
+			msg_to_char(ch, "You don't have a mini-pet called '%s'.\r\n", argument);
+		}
+		else if ((mob = find_minipet(ch)) && GET_MOB_VNUM(mob) == GET_MOB_VNUM(to_summon)) {
+			msg_to_char(ch, "You already have that mini-pet out.\r\n");
+		}
+		else {
+			dismiss_any_minipet(ch);	// out with the old...
+			
+			mob = read_mobile(GET_MOB_VNUM(to_summon), TRUE);
+			SET_BIT(MOB_FLAGS(mob), default_minipet_flags);
+			SET_BIT(AFF_FLAGS(mob), default_minipet_affs);	// will this work?
+			
+			// try to scale mob to the summoner (most minipets have level caps of 1 tho)
+			scale_mob_as_familiar(mob, ch);
+			
+			char_to_room(mob, IN_ROOM(ch));
+			act("You whistle and $N appears!", FALSE, ch, NULL, mob, TO_CHAR);
+			act("$n whistles and $N appears!", FALSE, ch, NULL, mob, TO_NOTVICT);
+			
+			add_follower(mob, ch, TRUE);
+			load_mtrigger(mob);
+			
+			command_lag(ch, WAIT_OTHER);
+		}
 	}
 }
 
@@ -2016,7 +2471,8 @@ ACMD(do_morph) {
 	morph_data *morph, *next_morph;
 	double multiplier;
 	obj_data *obj;
-	bool normal;
+	bool normal, fast;
+	char *tmp;
 	
 	// safety first: mobs must use %morph%
 	if (IS_NPC(ch)) {
@@ -2040,7 +2496,14 @@ ACMD(do_morph) {
 				continue;
 			}
 			
-			msg_to_char(ch, ", %s", skip_filler(MORPH_SHORT_DESC(morph)));
+			if (strstr(MORPH_SHORT_DESC(morph), "#n")) {
+				tmp = str_replace("#n", PERS(ch, ch, TRUE), MORPH_SHORT_DESC(morph));
+				msg_to_char(ch, ", %s", tmp);
+				free(tmp);	// allocated by str_replace
+			}
+			else { // no #n
+				msg_to_char(ch, ", %s", skip_filler(MORPH_SHORT_DESC(morph)));
+			}
 		}
 		
 		msg_to_char(ch, "\r\n");
@@ -2049,8 +2512,9 @@ ACMD(do_morph) {
 	
 	// initialize
 	morph = NULL;
+	fast = (subcmd == SCMD_FASTMORPH || FIGHTING(ch) || GET_POS(ch) == POS_FIGHTING);
 	normal = (!str_cmp(argument, "normal") | !str_cmp(argument, "norm"));
-	multiplier = (subcmd == SCMD_FASTMORPH || FIGHTING(ch) || GET_POS(ch) == POS_FIGHTING) ? 3.0 : 1.0;
+	multiplier = fast ? 3.0 : 1.0;
 	
 	if (normal && !IS_MORPHED(ch)) {
 		msg_to_char(ch, "You aren't morphed.\r\n");
@@ -2082,7 +2546,7 @@ ACMD(do_morph) {
 	else if (morph && MORPH_FLAGGED(morph, MORPHF_VAMPIRE_ONLY) && !IS_VAMPIRE(ch)) {
 		msg_to_char(ch, "You must be a vampire to do that.\r\n");
 	}
-	else if (morph && subcmd == SCMD_FASTMORPH && MORPH_FLAGGED(morph, MORPHF_NO_FASTMORPH)) {
+	else if (morph && fast && MORPH_FLAGGED(morph, MORPHF_NO_FASTMORPH)) {
 		msg_to_char(ch, "You cannot fastmorph into that form.\r\n");
 	}
 	else {
@@ -2094,12 +2558,19 @@ ACMD(do_morph) {
 			command_lag(ch, WAIT_ABILITY);
 		}
 		
-		// take the obj
-		if (morph && MORPH_REQUIRES_OBJ(morph) != NOTHING && MORPH_FLAGGED(morph, MORPHF_CONSUME_OBJ) && (obj = get_obj_in_list_vnum(MORPH_REQUIRES_OBJ(morph), ch->carrying))) {
-			extract_obj(obj);
+		// required obj?
+		if (morph && MORPH_REQUIRES_OBJ(morph) != NOTHING && (obj = get_obj_in_list_vnum(MORPH_REQUIRES_OBJ(morph), ch->carrying))) {
+			if (!IS_IMMORTAL(ch) && OBJ_FLAGGED(obj, OBJ_BIND_FLAGS)) {	// bind when used
+				bind_obj_to_player(obj, ch);
+				reduce_obj_binding(obj, ch);
+			}
+			
+			if (MORPH_FLAGGED(morph, MORPHF_CONSUME_OBJ)) {	// take the obj
+				extract_obj(obj);
+			}
 		}
 		
-		if (IS_NPC(ch) || FIGHTING(ch) || GET_POS(ch) == POS_FIGHTING || subcmd == SCMD_FASTMORPH) {
+		if (IS_NPC(ch) || fast) {
 			// insta-morph!
 			finish_morphing(ch, morph);
 			command_lag(ch, WAIT_OTHER);
@@ -2120,14 +2591,14 @@ ACMD(do_mydescription) {
 		msg_to_char(ch, "You can't do that.\r\n");
 	}
 	else if (!*argument) {
-		msg_to_char(ch, "Your current description (type 'mydescription set' to change):\r\n%s", GET_LONG_DESC(ch) ? GET_LONG_DESC(ch) : " not set\r\n");
+		msg_to_char(ch, "Your current description (type 'mydescription set' to change):\r\n%s", GET_LOOK_DESC(ch) ? GET_LOOK_DESC(ch) : " not set\r\n");
 	}
 	else if (!str_cmp(argument, "set")) {
 		if (ch->desc->str) {
 			msg_to_char(ch, "You are already editing text.\r\n");
 		}
 		else {
-			start_string_editor(ch->desc, "your description", &(GET_LONG_DESC(ch)), MAX_PLAYER_DESCRIPTION, TRUE);
+			start_string_editor(ch->desc, "your description", &(GET_LOOK_DESC(ch)), MAX_PLAYER_DESCRIPTION, TRUE);
 		}
 	}
 	else {
@@ -2153,7 +2624,7 @@ ACMD(do_order) {
 		send_to_char("You obviously suffer from schizophrenia.\r\n", ch);
 	else {
 		if (AFF_FLAGGED(ch, AFF_CHARM)) {
-			send_to_char("Your superior would not aprove of you giving orders.\r\n", ch);
+			send_to_char("Your superior would not approve of you giving orders.\r\n", ch);
 			return;
 		}
 		if (vict) {
@@ -2293,7 +2764,7 @@ ACMD(do_quit) {
 		if (!GET_INVIS_LEV(ch)) {
 			act("$n has left the game.", TRUE, ch, 0, 0, TO_ROOM);
 		}
-		syslog(SYS_LOGIN, GET_INVIS_LEV(ch), TRUE, "%s has quit the game.", GET_NAME(ch));
+		syslog(SYS_LOGIN, GET_INVIS_LEV(ch), TRUE, "%s has quit the game at %s", GET_NAME(ch), IN_ROOM(ch) ? room_log_identifier(IN_ROOM(ch)) : "an unknown location");
 		if (GET_INVIS_LEV(ch) == 0) {
 			if (config_get_bool("public_logins")) {
 				mortlog("%s has left the game", PERS(ch, ch, 1));
@@ -2303,6 +2774,7 @@ ACMD(do_quit) {
 			}
 		}
 		send_to_char("Goodbye, friend... Come back soon!\r\n", ch);
+		dismiss_any_minipet(ch);
 
 		/*
 		 * kill off all sockets connected to the same player as the one who is
@@ -2320,9 +2792,10 @@ ACMD(do_quit) {
 		
 		display_statistics_to_char(ch);
 		
-		// this will disconnect the descriptor
+		pause_affect_total = TRUE;	// prevent unneeded affect_totals
 		extract_all_items(ch);
-		extract_char(ch);
+		extract_char(ch);	// this will disconnect the descriptor
+		pause_affect_total = FALSE;
 	}
 }
 
@@ -2371,7 +2844,7 @@ ACMD(do_selfdelete) {
 	else {
 		
 		// logs and messaging
-		syslog(SYS_INFO, GET_INVIS_LEV(ch), TRUE, "DEL: %s (lev %d/%d) has self-deleted.", GET_NAME(ch), GET_COMPUTED_LEVEL(ch), GET_ACCESS_LEVEL(ch));
+		syslog(SYS_INFO, GET_INVIS_LEV(ch), TRUE, "DEL: %s (lev %d/%d) has self-deleted", GET_NAME(ch), GET_COMPUTED_LEVEL(ch), GET_ACCESS_LEVEL(ch));
 		if (!GET_INVIS_LEV(ch)) {
 			act("$n has left the game.", TRUE, ch, 0, 0, TO_ROOM);
 		}
@@ -2402,8 +2875,17 @@ ACMD(do_shear) {
 	if (!IS_APPROVED(ch) && config_get_bool("gather_approval")) {
 		send_config_msg(ch, "need_approval_string");
 	}
-	else if (!HAS_FUNCTION(IN_ROOM(ch), FNC_STABLE) || !IS_COMPLETE(IN_ROOM(ch))) {
+	else if (!has_player_tech(ch, PTECH_SHEAR)) {
+		msg_to_char(ch, "You don't have the correct ability to shear animals.\r\n");
+	}
+	else if (!room_has_function_and_city_ok(IN_ROOM(ch), FNC_STABLE)) {
 		msg_to_char(ch, "You need to be in a stable to shear anything.\r\n");
+	}
+	else if (!check_in_city_requirement(IN_ROOM(ch), TRUE)) {
+		msg_to_char(ch, "This stable must be in a city for you to shear anything.\r\n");
+	}
+	else if (!IS_COMPLETE(IN_ROOM(ch))) {
+		msg_to_char(ch, "Complete the building first.\r\n");
 	}
 	else if (!check_in_city_requirement(IN_ROOM(ch), TRUE)) {
 		msg_to_char(ch, "This building must be in a city to use it.\r\n");
@@ -2430,7 +2912,8 @@ ACMD(do_shear) {
 		any |= run_global_mob_interactions(ch, mob, INTERACT_SHEAR, shear_interact);
 		
 		if (any) {
-			gain_ability_exp(ch, ABIL_MASTER_FARMER, 5);
+			gain_player_tech_exp(ch, PTECH_SHEAR, 33);
+			gain_player_tech_exp(ch, PTECH_SHEAR_UPGRADE, 33);
 		}
 		else {
 			act("You can't shear $N!", FALSE, ch, NULL, mob, TO_CHAR);
@@ -2471,8 +2954,14 @@ ACMD(do_skin) {
 	else {
 		// run it
 		if (!run_interactions(ch, proto->interactions, INTERACT_SKIN, IN_ROOM(ch), NULL, obj, skin_interact)) {
-			msg_to_char(ch, "There isn't anything you can skin from that corpse.\r\n");
+			act("You try to skin $p but get nothing useful.", FALSE, ch, obj, NULL, TO_CHAR);
 		}
+		else {
+			gain_player_tech_exp(ch, PTECH_SKINNING_UPGRADE, 15);
+		}
+		
+		SET_BIT(GET_OBJ_VAL(obj, VAL_CORPSE_FLAGS), CORPSE_SKINNED);
+		command_lag(ch, WAIT_OTHER);
 	}
 }
 
@@ -2483,9 +2972,9 @@ ACMD(do_summon) {
 	void setup_generic_npc(char_data *mob, empire_data *emp, int name, int sex);
 	
 	char_data *mob;
-	int vnum = NOTHING, ability = NO_ABIL, iter, max = 1, cost = 0;
+	int vnum = NOTHING, ability = NO_ABIL, iter, max = 1, cost = 0, diff = DIFF_MEDIUM;
 	empire_data *emp = NULL;
-	bool follow = FALSE, familiar = FALSE, charm = FALSE, local = FALSE;
+	bool junk, follow = FALSE, familiar = FALSE, charm = FALSE, local = FALSE;
 	int count, cooldown = NOTHING, cooldown_time = 0, cost_type = MOVE, gain = 20;
 	
 	const int animal_vnums[] = { DOG, CHICKEN, QUAIL };
@@ -2493,6 +2982,9 @@ ACMD(do_summon) {
 	
 	const int human_vnums[] = { HUMAN_MALE_1, HUMAN_MALE_2, HUMAN_FEMALE_1, HUMAN_FEMALE_2 };
 	const int num_human_vnums = 4;
+	
+	// non-ability summons (must be unique and negative):
+	#define SUMMON_GUARDS  -10
 	
 	argument = one_argument(argument, arg);
 	
@@ -2515,14 +3007,14 @@ ACMD(do_summon) {
 		cooldown_time = 30;
 	}
 	else if (is_abbrev(arg, "guards")) {
-		ability = ABIL_SUMMON_GUARDS;
+		ability = SUMMON_GUARDS;
 		cooldown = COOLDOWN_SUMMON_GUARDS;
 		cooldown_time = 3 * SECS_PER_REAL_MIN;
 	}
 	else if (is_abbrev(arg, "bodyguard")) {
 		ability = ABIL_SUMMON_BODYGUARD;
 		cooldown = COOLDOWN_SUMMON_BODYGUARD;
-		cooldown_time = 5 * SECS_PER_REAL_MIN;
+		cooldown_time = 3 * SECS_PER_REAL_MIN;
 	}
 	else if (is_abbrev(arg, "thugs")) {
 		ability = ABIL_SUMMON_THUG;
@@ -2560,7 +3052,7 @@ ACMD(do_summon) {
 	}
 	
 	if (count > config_get_int("summon_npc_limit")) {
-		msg_to_char(ch, "There are too many npcs here to summon more.\r\n");
+		msg_to_char(ch, "There are too many NPCs here to summon more.\r\n");
 		return;
 	}
 
@@ -2650,7 +3142,7 @@ ACMD(do_summon) {
 			local = TRUE;
 			break;
 		}
-		case ABIL_SUMMON_GUARDS: {
+		case SUMMON_GUARDS: {
 			cost = 25;
 			cost_type = MOVE;
 			
@@ -2658,8 +3150,8 @@ ACMD(do_summon) {
 				msg_to_char(ch, "You must be in an empire to summon guards.\r\n");
 				return;
 			}
-			if (GET_LOYALTY(ch) != ROOM_OWNER(IN_ROOM(ch))) {
-				msg_to_char(ch, "You can only summon guards in your empire's territory.\r\n");
+			if (GET_LOYALTY(ch) != ROOM_OWNER(IN_ROOM(ch)) || get_territory_type_for_empire(IN_ROOM(ch), GET_LOYALTY(ch), FALSE, &junk) == TER_FRONTIER) {
+				msg_to_char(ch, "You can only summon guards in your empire's cities and outskirts.\r\n");
 				return;
 			}
 
@@ -2688,6 +3180,7 @@ ACMD(do_summon) {
 			}
 			
 			vnum = BODYGUARD;
+			diff = DIFF_TRIVIAL;
 			follow = TRUE;
 			familiar = TRUE;
 			break;
@@ -2709,7 +3202,8 @@ ACMD(do_summon) {
 		return;
 	}
 	
-	if (ABILITY_TRIGGERS(ch, NULL, NULL, ability)) {
+	// check triggers only if a real ability
+	if (ability != NO_ABIL && ability >= 0 && ABILITY_TRIGGERS(ch, NULL, NULL, ability)) {
 		return;
 	}
 	
@@ -2719,7 +3213,7 @@ ACMD(do_summon) {
 	act("$n whistles loudly!", FALSE, ch, 0, 0, TO_ROOM);
 
 	for (iter = 0; iter < max; ++iter) {
-		if (skill_check(ch, ability, DIFF_MEDIUM)) {
+		if (ability == NO_ABIL || ability < 0 || skill_check(ch, ability, diff)) {
 			mob = read_mobile(vnum, TRUE);
 			if (IS_NPC(ch)) {
 				MOB_INSTANCE_ID(mob) = MOB_INSTANCE_ID(ch);
@@ -2767,7 +3261,7 @@ ACMD(do_summon) {
 		}
 	}
 	
-	if (ability != NO_ABIL) {
+	if (ability != NO_ABIL && ability >= 0) {
 		gain_ability_exp(ch, ability, gain);
 	}
 }
@@ -2799,14 +3293,14 @@ ACMD(do_title) {
 
 
 ACMD(do_toggle) {
-	extern const struct toggle_data_type toggle_data[];	// constants.c
-	
 	const char *togcols[NUM_TOG_TYPES][2] = { { "\tr", "\tg" }, { "\tg", "\tr" } };
 	const char *tognames[NUM_TOG_TYPES][2] = { { "off", "on" }, { "on", "off" } };
 	const char *imm_color = "\tc";
 	const char *clear_color = "\t0";
 
-	int iter, type = NOTHING, count, on;
+	int iter, type = NOTHING, count, on, pos;
+	char arg[MAX_INPUT_LENGTH];
+	struct alpha_tog *altog;
 	bool imm;
 	bool screenreader = PRF_FLAGGED(ch, PRF_SCREEN_READER);
 	
@@ -2814,27 +3308,35 @@ ACMD(do_toggle) {
 		msg_to_char(ch, "NPCs do not have toggles.\r\n");
 		return;
 	}
-
+	
+	argument = any_one_arg(argument, arg);
 	skip_spaces(&argument);
 	
 	for (iter = 0; *toggle_data[iter].name != '\n' && type == NOTHING; ++iter) {
-		if (toggle_data[iter].level <= GET_ACCESS_LEVEL(ch) && is_abbrev(argument, toggle_data[iter].name)) {
+		if (toggle_data[iter].level <= GET_ACCESS_LEVEL(ch) && is_abbrev(arg, toggle_data[iter].name)) {
 			type = iter;
 		}
 	}
 	
-	if (!*argument) {
+	if (!*arg) {
 		msg_to_char(ch, "Toggles:\r\n");
+		alphabetize_toggles();	// in case
 		
-		for (iter = count = 0; *toggle_data[iter].name != '\n'; ++iter) {
-			if (toggle_data[iter].level <= GET_ACCESS_LEVEL(ch)) {
-				on = (PRF_FLAGGED(ch, toggle_data[iter].bit) ? 1 : 0);
-				imm = (toggle_data[iter].level >= LVL_START_IMM);
+		iter = count = 0;
+		LL_FOREACH(alpha_tog_list, altog) {
+			pos = screenreader ? altog->pos : iter++;	// shows in alpha order for SR; normal order for rest
+			if (*toggle_data[pos].name == '\n') {
+				break;	// this should not be possible, but just in case
+			}
+			
+			if (toggle_data[pos].level <= GET_ACCESS_LEVEL(ch)) {
+				on = (PRF_FLAGGED(ch, toggle_data[pos].bit) ? 1 : 0);
+				imm = (toggle_data[pos].level >= LVL_START_IMM);
 				if (screenreader) {
-					msg_to_char(ch, "%s: %s%s\r\n", toggle_data[iter].name, tognames[toggle_data[iter].type][on], imm ? " (immortal)" : "");
+					msg_to_char(ch, "%s: %s%s\r\n", toggle_data[pos].name, tognames[toggle_data[pos].type][on], imm ? " (immortal)" : "");
 				}
 				else {
-					msg_to_char(ch, " %s[%s%3.3s%s] %-15.15s%s%s", imm ? imm_color : "", togcols[toggle_data[iter].type][on], tognames[toggle_data[iter].type][on], imm ? imm_color : clear_color, toggle_data[iter].name, clear_color, (!(++count % 3) ? "\r\n" : ""));
+					msg_to_char(ch, " %s[%s%3.3s%s] %-15.15s%s%s", imm ? imm_color : "", togcols[toggle_data[pos].type][on], tognames[toggle_data[pos].type][on], imm ? imm_color : clear_color, toggle_data[pos].name, clear_color, (!(++count % 3) ? "\r\n" : ""));
 				}
 			}
 		}
@@ -2844,16 +3346,41 @@ ACMD(do_toggle) {
 		}
 	}
 	else if (type == NOTHING) {
-		msg_to_char(ch, "Unknown toggle '%s'.\r\n", argument);
+		msg_to_char(ch, "Unknown toggle '%s'.\r\n", arg);
 	}
 	else {
-		on = PRF_TOG_CHK(ch, toggle_data[type].bit);
-		on = PRF_FLAGGED(ch, toggle_data[type].bit) ? 1 : 0;
-		
-		// special case for pvp toggle
-		if (toggle_data[type].bit == PRF_ALLOW_PVP) {
-			add_cooldown(ch, COOLDOWN_PVP_FLAG, config_get_int("pvp_timer") * SECS_PER_REAL_MIN);
+		// check for optional on/off arg
+		if (!str_cmp(argument, "on")) {
+			if (IS_SET(PRF_FLAGS(ch), toggle_data[type].bit)) {
+				msg_to_char(ch, "That toggle is already on.\r\n");
+				return;
+			}
+			
+			if (toggle_data[type].type == TOG_ONOFF) {
+				SET_BIT(PRF_FLAGS(ch), toggle_data[type].bit);
+			}
+			else {
+				REMOVE_BIT(PRF_FLAGS(ch), toggle_data[type].bit);
+			}
 		}
+		else if (!str_cmp(argument, "off")) {
+			if (!IS_SET(PRF_FLAGS(ch), toggle_data[type].bit)) {
+				msg_to_char(ch, "That toggle is already off.\r\n");
+				return;
+			}
+			
+			if (toggle_data[type].type == TOG_ONOFF) {
+				REMOVE_BIT(PRF_FLAGS(ch), toggle_data[type].bit);
+			}
+			else {
+				SET_BIT(PRF_FLAGS(ch), toggle_data[type].bit);
+			}
+		}
+		else {	// neither on nor off specified
+			on = PRF_TOG_CHK(ch, toggle_data[type].bit);
+		}
+		
+		on = PRF_FLAGGED(ch, toggle_data[type].bit) ? 1 : 0;
 		
 		msg_to_char(ch, "You toggle %s %s%s&0.\r\n", toggle_data[type].name, togcols[toggle_data[type].type][on], tognames[toggle_data[type].type][on]);
 		

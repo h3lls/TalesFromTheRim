@@ -24,6 +24,7 @@
 #include "db.h"
 #include "skills.h"
 #include "olc.h"
+#include "dg_event.h"
 
 
 extern const char *cmd_door[];
@@ -39,6 +40,10 @@ char *str_str(char *cs, char *ct);
 extern const char *dirs[];
 extern const int rev_dir[];
 extern struct instance_data *quest_instance_global;
+
+// locals
+int buy_vtrigger(char_data *actor, char_data *shopkeeper, obj_data *buying, int cost, any_vnum currency);
+int kill_otrigger(obj_data *obj, char_data *dying, char_data *killer);
 
 
 /*
@@ -340,6 +345,76 @@ int entry_mtrigger(char_data *ch) {
 
 
 /**
+* Buy trigger (mob): fires when someone is about to buy.
+*
+* @param char_data *actor The person trying to buy.
+* @param char_data *shopkeeper The mob shopkeeper, if any (many shops have none).
+* @param obj_data *buying The item being bought.
+* @param int cost The amount to be charged.
+* @param any_vnum currency The currency type (NOTHING for coins).
+* @return int 0 if a trigger blocked the buy (stop); 1 if not (ok to continue).
+*/
+int buy_mtrigger(char_data *actor, char_data *shopkeeper, obj_data *buying, int cost, any_vnum currency) {
+	union script_driver_data_u sdd;
+	char buf[MAX_INPUT_LENGTH];
+	char_data *ch, *ch_next;
+	trig_data *t;
+	
+	// gods not affected
+	if (!valid_dg_target(actor, DG_ALLOW_GODS)) {
+		return 1;
+	}
+	
+	LL_FOREACH_SAFE2(ROOM_PEOPLE(IN_ROOM(actor)), ch, ch_next, next_in_room) {
+		if (!SCRIPT_CHECK(ch, MTRIG_BUY)) {
+			continue;
+		}
+		if (actor == ch) {
+			continue;
+		}
+		
+		LL_FOREACH(TRIGGERS(SCRIPT(ch)), t) {
+			if (AFF_FLAGGED(ch, AFF_CHARM) && !TRIGGER_CHECK(t, MTRIG_CHARMED)) {
+				continue;
+			}
+			if (!TRIGGER_CHECK(t, MTRIG_BUY)) {
+				continue;
+			}
+			
+			// vars
+			ADD_UID_VAR(buf, t, char_script_id(actor), "actor", 0);
+			ADD_UID_VAR(buf, t, obj_script_id(buying), "obj", 0);
+			if (shopkeeper) {
+				ADD_UID_VAR(buf, t, char_script_id(shopkeeper), "shopkeeper", 0);
+			}
+			else {
+				add_var(&GET_TRIG_VARS(t), "shopkeeper", "", 0);
+			}
+			
+			snprintf(buf, sizeof(buf), "%d", cost);
+			add_var(&GET_TRIG_VARS(t), "cost", buf, 0);
+			
+			if (currency == NOTHING) {
+				strcpy(buf, "coins");
+			}
+			else {
+				snprintf(buf, sizeof(buf), "%d", currency);
+			}
+			add_var(&GET_TRIG_VARS(t), "currency", buf, 0);
+			
+			// run it:
+			sdd.c = ch;
+			if (!script_driver(&sdd, t, MOB_TRIGGER, TRIG_NEW)) {
+				return 0;
+			}
+		}
+	}
+
+	return 1;
+}
+
+
+/**
 * Command trigger (mob).
 *
 * @param char_data *actor The person typing a command.
@@ -360,7 +435,7 @@ int command_mtrigger(char_data *actor, char *cmd, char *argument, int mode) {
 	for (ch = ROOM_PEOPLE(IN_ROOM(actor)); ch; ch = ch_next) {
 		ch_next = ch->next_in_room;
 
-		if (SCRIPT_CHECK(ch, MTRIG_COMMAND) && (actor!=ch)) {
+		if (SCRIPT_CHECK(ch, MTRIG_COMMAND) && (actor != ch || !AFF_FLAGGED(ch, AFF_ORDERED))) {
 			for (t = TRIGGERS(SCRIPT(ch)); t; t = t->next) {
 				if (AFF_FLAGGED(ch, AFF_CHARM) && !TRIGGER_CHECK(t, MTRIG_CHARMED)) {
 					continue;
@@ -581,12 +656,15 @@ int death_mtrigger(char_data *ch, char_data *actor) {
 	return 1;
 }
 
-void bribe_mtrigger(char_data *ch, char_data *actor, int amount) {
+
+// returns 0 to block the bribe, 1 to allow it
+int bribe_mtrigger(char_data *ch, char_data *actor, int amount) {
 	trig_data *t;
 	char buf[MAX_INPUT_LENGTH];
+	int ret_val;
 
 	if (!SCRIPT_CHECK(ch, MTRIG_BRIBE))
-		return;
+		return 1;
 
 	for (t = TRIGGERS(SCRIPT(ch)); t; t = t->next) {
 		if (AFF_FLAGGED(ch, AFF_CHARM) && !TRIGGER_CHECK(t, MTRIG_CHARMED)) {
@@ -598,10 +676,18 @@ void bribe_mtrigger(char_data *ch, char_data *actor, int amount) {
 			snprintf(buf, sizeof(buf), "%d", amount);
 			add_var(&GET_TRIG_VARS(t), "amount", buf, 0);
 			ADD_UID_VAR(buf, t, char_script_id(actor), "actor", 0);
-			script_driver(&sdd, t, MOB_TRIGGER, TRIG_NEW);
-			break;
+			ret_val = script_driver(&sdd, t, MOB_TRIGGER, TRIG_NEW);
+			
+			if (EXTRACTED(actor) || EXTRACTED(ch) || IS_DEAD(actor) || IS_DEAD(ch)) {
+				return 0;
+			}
+			else {
+				return ret_val;
+			}
 		}
 	}
+	
+	return 1;
 }
 
 
@@ -654,7 +740,13 @@ int ability_mtrigger(char_data *actor, char_data *ch, any_vnum abil) {
 }
 
 
-int leave_mtrigger(char_data *actor, int dir) {
+/**
+* @param char_data *actor The person trying to leave.
+* @param int dir The direction they are trying to go (passed through to %direction%).
+* @param char *custom_dir Optional: A different value for %direction% (may be NULL).
+* @return int 0 = block the leave, 1 = pass
+*/
+int leave_mtrigger(char_data *actor, int dir, char *custom_dir) {
 	trig_data *t;
 	char_data *ch;
 	char buf[MAX_INPUT_LENGTH];
@@ -678,9 +770,9 @@ int leave_mtrigger(char_data *actor, int dir) {
 			if (((IS_SET(GET_TRIG_TYPE(t), MTRIG_LEAVE) && CAN_SEE(ch, actor)) || IS_SET(GET_TRIG_TYPE(t), MTRIG_LEAVE_ALL)) && !GET_TRIG_DEPTH(t) && (number(1, 100) <= GET_TRIG_NARG(t))) {
 				union script_driver_data_u sdd;
 				if (dir>=0 && dir < NUM_OF_DIRS)
-					add_var(&GET_TRIG_VARS(t), "direction", (char *)dirs[dir], 0);
+					add_var(&GET_TRIG_VARS(t), "direction", custom_dir ? custom_dir : (char *)dirs[dir], 0);
 				else
-					add_var(&GET_TRIG_VARS(t), "direction", "none", 0);
+					add_var(&GET_TRIG_VARS(t), "direction", custom_dir ? custom_dir : "none", 0);
 				ADD_UID_VAR(buf, t, char_script_id(actor), "actor", 0);
 				sdd.c = ch;
 				return script_driver(&sdd, t, MOB_TRIGGER, TRIG_NEW);
@@ -796,6 +888,108 @@ int get_otrigger(obj_data *obj, char_data *actor) {
 				return 0;
 			else
 				return ret_val;
+		}
+	}
+
+	return 1;
+}
+
+
+/**
+* Buy trigger (obj) sub-processor.
+*
+* @param obj_data *obj The item to check.
+* @param char_data *actor The person trying to buy.
+* @param char_data *shopkeeper The mob shopkeeper, if any (many shops have none).
+* @param obj_data *buying The item being bought.
+* @param int cost The amount to be charged.
+* @param any_vnum currency The currency type (NOTHING for coins).
+* @param int type Location: OCMD_EQUIP, etc.
+* @return int 0 if a trigger blocked the buy (stop); 1 if not (ok to continue).
+*/
+int buy_otrig(obj_data *obj, char_data *actor, char_data *shopkeeper, obj_data *buying, int cost, any_vnum currency, int type) {
+	union script_driver_data_u sdd;
+	char buf[MAX_INPUT_LENGTH];
+	trig_data *t;
+
+	if (!obj || !SCRIPT_CHECK(obj, OTRIG_BUY)) {
+		return 1;
+	}
+	
+	LL_FOREACH(TRIGGERS(SCRIPT(obj)), t) {
+		if (!TRIGGER_CHECK(t, OTRIG_BUY)) {
+			continue;	// not a buy trigger
+		}
+		if (!IS_SET(GET_TRIG_NARG(t), type)) {
+			continue;	// bad location
+		}
+
+		// vars
+		ADD_UID_VAR(buf, t, char_script_id(actor), "actor", 0);
+		ADD_UID_VAR(buf, t, obj_script_id(buying), "obj", 0);
+		if (shopkeeper) {
+			ADD_UID_VAR(buf, t, char_script_id(shopkeeper), "shopkeeper", 0);
+		}
+			else {
+				add_var(&GET_TRIG_VARS(t), "shopkeeper", "", 0);
+			}
+		
+		snprintf(buf, sizeof(buf), "%d", cost);
+		add_var(&GET_TRIG_VARS(t), "cost", buf, 0);
+		
+		if (currency == NOTHING) {
+			strcpy(buf, "coins");
+		}
+		else {
+			snprintf(buf, sizeof(buf), "%d", currency);
+		}
+		add_var(&GET_TRIG_VARS(t), "currency", buf, 0);
+		
+		// run it
+		sdd.o = obj;
+		if (!script_driver(&sdd, t, OBJ_TRIGGER, TRIG_NEW)) {
+			return 0;
+		}
+	}
+
+	return 1;
+}
+
+
+/**
+* Buy trigger (obj): fires before someone buys something.
+*
+* @param char_data *actor The person trying to buy.
+* @param char_data *shopkeeper The mob shopkeeper, if any (many shops have none).
+* @param obj_data *buying The item being bought.
+* @param int cost The amount to be charged.
+* @param any_vnum currency The currency type (NOTHING for coins).
+* @return int 0 if a trigger blocked the buy (stop); 1 if not (ok to continue).
+*/
+int buy_otrigger(char_data *actor, char_data *shopkeeper, obj_data *buying, int cost, any_vnum currency) {
+	obj_data *obj;
+	int iter;
+	
+	// gods not affected
+	if (!valid_dg_target(actor, DG_ALLOW_GODS)) {
+		return 1;
+	}
+	
+	for (iter = 0; iter < NUM_WEARS; iter++) {
+		if (!buy_otrig(GET_EQ(actor, iter), actor, shopkeeper, buying, cost, currency, OCMD_EQUIP)) {
+			return 0;
+		}
+	}
+	
+	LL_FOREACH2(actor->carrying, obj, next_content) {
+		if (!buy_otrig(obj, actor, shopkeeper, buying, cost, currency, OCMD_INVEN)) {
+			return 0;
+		}
+	}
+
+	LL_FOREACH2(ROOM_CONTENTS(IN_ROOM(actor)), obj, next_content) {
+		if (!buy_otrig(obj, actor, shopkeeper, buying, cost, currency, OCMD_ROOM)) {
+			return 0;
 		}
 	}
 
@@ -944,7 +1138,12 @@ int remove_otrigger(obj_data *obj, char_data *actor) {
 }
 
 
-int drop_otrigger(obj_data *obj, char_data *actor) {
+/**
+* @param obj_data *obj The object being dropped/put/etc.
+* @param char_data *actor The person doing.
+* @param int mode Any DROP_TRIG_ type.
+*/
+int drop_otrigger(obj_data *obj, char_data *actor, int mode) {
 	trig_data *t;
 	char buf[MAX_INPUT_LENGTH];
 	int ret_val;
@@ -956,6 +1155,30 @@ int drop_otrigger(obj_data *obj, char_data *actor) {
 		if (TRIGGER_CHECK(t, OTRIG_DROP) && (number(1, 100) <= GET_TRIG_NARG(t))) {
 			union script_driver_data_u sdd;
 			ADD_UID_VAR(buf, t, char_script_id(actor), "actor", 0);
+			
+			switch (mode) {
+				case DROP_TRIG_DROP: {
+					add_var(&GET_TRIG_VARS(t), "command", "drop", 0);
+					break;
+				}
+				case DROP_TRIG_JUNK: {
+					add_var(&GET_TRIG_VARS(t), "command", "junk", 0);
+					break;
+				}
+				case DROP_TRIG_PUT: {
+					add_var(&GET_TRIG_VARS(t), "command", "put", 0);
+					break;
+				}
+				case DROP_TRIG_SACRIFICE: {
+					add_var(&GET_TRIG_VARS(t), "command", "sacrifice", 0);
+					break;
+				}
+				default: {
+					add_var(&GET_TRIG_VARS(t), "command", "unknown", 0);
+					break;
+				}
+			}
+			
 			sdd.o = obj;
 			ret_val = script_driver(&sdd, t, OBJ_TRIGGER, TRIG_NEW);
 			obj = sdd.o;
@@ -1047,7 +1270,15 @@ int ability_otrigger(char_data *actor, obj_data *obj, any_vnum abil) {
 return 1;
 }
 
-int leave_otrigger(room_data *room, char_data *actor, int dir) {
+
+/**
+* @param room_data *room The room the person is trying to leave.
+* @param char_data *actor The person trying to leave.
+* @param int dir The direction they are trying to go (passed through to %direction%).
+* @param char *custom_dir Optional: A different value for %direction% (may be NULL).
+* @return int 0 = block the leave, 1 = pass
+*/
+int leave_otrigger(room_data *room, char_data *actor, int dir, char *custom_dir) {
 	trig_data *t;
 	char buf[MAX_INPUT_LENGTH];
 	int temp, final = 1;
@@ -1066,9 +1297,9 @@ int leave_otrigger(room_data *room, char_data *actor, int dir) {
 			if (TRIGGER_CHECK(t, OTRIG_LEAVE) && (number(1, 100) <= GET_TRIG_NARG(t))) {
 				union script_driver_data_u sdd;
 				if (dir>=0 && dir < NUM_OF_DIRS)
-					add_var(&GET_TRIG_VARS(t), "direction", (char *)dirs[dir], 0);
+					add_var(&GET_TRIG_VARS(t), "direction", custom_dir ? custom_dir : (char *)dirs[dir], 0);
 				else
-					add_var(&GET_TRIG_VARS(t), "direction", "none", 0);
+					add_var(&GET_TRIG_VARS(t), "direction", custom_dir ? custom_dir : "none", 0);
 				ADD_UID_VAR(buf, t, char_script_id(actor), "actor", 0);
 				sdd.o = obj;
 				temp = script_driver(&sdd, t, OBJ_TRIGGER, TRIG_NEW);
@@ -1082,7 +1313,19 @@ int leave_otrigger(room_data *room, char_data *actor, int dir) {
 	return final;
 }
 
-int consume_otrigger(obj_data *obj, char_data *actor, int cmd) {
+
+/**
+* A trigger that fires when a character tries to 'consume' an object. Most
+* consume triggers can block the action by returning 0, but a few (poisons and
+* shooting) cannot block.
+*
+* @param obj_data *obj The item to test for triggers.
+* @param char_data *actor The player consuming the object.
+* @param int cmd The command that's consuming the item (OCMD_*).
+* @param char_data *target Optional: If the consume is targeted (e.g. poisons), the target (may be NULL).
+* @return int 0 to block consume, 1 to continue.
+*/
+int consume_otrigger(obj_data *obj, char_data *actor, int cmd, char_data *target) {
 	trig_data *t;
 	char buf[MAX_INPUT_LENGTH];
 	int ret_val;
@@ -1094,6 +1337,13 @@ int consume_otrigger(obj_data *obj, char_data *actor, int cmd) {
 		if (TRIGGER_CHECK(t, OTRIG_CONSUME)) {
 			union script_driver_data_u sdd;
 			ADD_UID_VAR(buf, t, char_script_id(actor), "actor", 0);
+			if (target) {
+				ADD_UID_VAR(buf, t, char_script_id(target), "target", 0);
+			}
+			else {
+				add_var(&GET_TRIG_VARS(t), "target", "", 0);
+			}
+			
 			switch (cmd) {
 				case OCMD_EAT:
 					add_var(&GET_TRIG_VARS(t), "command", "eat", 0);
@@ -1114,6 +1364,22 @@ int consume_otrigger(obj_data *obj, char_data *actor, int cmd) {
 				}
 				case OCMD_CRAFT: {
 					add_var(&GET_TRIG_VARS(t), "command", "craft", 0);
+					break;
+				}
+				case OCMD_SHOOT: {
+					add_var(&GET_TRIG_VARS(t), "command", "shoot", 0);
+					break;
+				}
+				case OCMD_POISON: {
+					add_var(&GET_TRIG_VARS(t), "command", "poison", 0);
+					break;
+				}
+				case OCMD_PAINT: {
+					add_var(&GET_TRIG_VARS(t), "command", "paint", 0);
+					break;
+				}
+				case OCMD_LIGHT: {
+					add_var(&GET_TRIG_VARS(t), "command", "light", 0);
 					break;
 				}
 			}
@@ -1356,6 +1622,67 @@ int enter_wtrigger(room_data *room, char_data *actor, int dir) {
 
 
 /**
+* Buy trigger (room): fires when someone tries to buy
+*
+* @param char_data *actor The person trying to buy.
+* @param char_data *shopkeeper The mob shopkeeper, if any (many shops have none).
+* @param obj_data *buying The item being bought.
+* @param int cost The amount to be charged.
+* @param any_vnum currency The currency type (NOTHING for coins).
+* @return int 0 if a trigger blocked the buy (stop); 1 if not (ok to continue).
+*/
+int buy_wtrigger(char_data *actor, char_data *shopkeeper, obj_data *buying, int cost, any_vnum currency) {
+	room_data *room = IN_ROOM(actor);
+	union script_driver_data_u sdd;
+	char buf[MAX_INPUT_LENGTH];
+	trig_data *t;
+
+	if (!SCRIPT_CHECK(IN_ROOM(actor), WTRIG_BUY)) {
+		return 1;
+	}
+	if (!valid_dg_target(actor, DG_ALLOW_GODS)) {
+		return 1;	// gods not affected
+	}
+	
+	LL_FOREACH(TRIGGERS(SCRIPT(room)), t) {
+		if (!TRIGGER_CHECK(t, WTRIG_BUY)) {
+			continue;
+		}
+		
+		// vars
+		ADD_UID_VAR(buf, t, room_script_id(room), "room", 0);
+		ADD_UID_VAR(buf, t, char_script_id(actor), "actor", 0);
+		ADD_UID_VAR(buf, t, obj_script_id(buying), "obj", 0);
+		if (shopkeeper) {
+			ADD_UID_VAR(buf, t, char_script_id(shopkeeper), "shopkeeper", 0);
+		}
+			else {
+				add_var(&GET_TRIG_VARS(t), "shopkeeper", "", 0);
+			}
+		
+		snprintf(buf, sizeof(buf), "%d", cost);
+		add_var(&GET_TRIG_VARS(t), "cost", buf, 0);
+		
+		if (currency == NOTHING) {
+			strcpy(buf, "coins");
+		}
+		else {
+			snprintf(buf, sizeof(buf), "%d", currency);
+		}
+		add_var(&GET_TRIG_VARS(t), "currency", buf, 0);
+		
+		// run it
+		sdd.r = room;
+		if (!script_driver(&sdd, t, WLD_TRIGGER, TRIG_NEW)) {
+			return 0;
+		}
+	}
+	
+	return 1;
+}
+
+
+/**
 * Command trigger (room).
 *
 * @param char_data *actor The person typing a command.
@@ -1434,7 +1761,13 @@ void speech_wtrigger(char_data *actor, char *str) {
 	}
 }
 
-int drop_wtrigger(obj_data *obj, char_data *actor) {
+
+/**
+* @param obj_data *obj The object being dropped/put/etc.
+* @param char_data *actor The person doing.
+* @param int mode Any DROP_TRIG_ type.
+*/
+int drop_wtrigger(obj_data *obj, char_data *actor, int mode) {
 	room_data *room;
 	trig_data *t;
 	char buf[MAX_INPUT_LENGTH];
@@ -1451,6 +1784,30 @@ int drop_wtrigger(obj_data *obj, char_data *actor) {
 			ADD_UID_VAR(buf, t, room_script_id(room), "room", 0);
 			ADD_UID_VAR(buf, t, char_script_id(actor), "actor", 0);
 			ADD_UID_VAR(buf, t, obj_script_id(obj), "object", 0);
+			
+			switch (mode) {
+				case DROP_TRIG_DROP: {
+					add_var(&GET_TRIG_VARS(t), "command", "drop", 0);
+					break;
+				}
+				case DROP_TRIG_JUNK: {
+					add_var(&GET_TRIG_VARS(t), "command", "junk", 0);
+					break;
+				}
+				case DROP_TRIG_PUT: {
+					add_var(&GET_TRIG_VARS(t), "command", "put", 0);
+					break;
+				}
+				case DROP_TRIG_SACRIFICE: {
+					add_var(&GET_TRIG_VARS(t), "command", "sacrifice", 0);
+					break;
+				}
+				default: {
+					add_var(&GET_TRIG_VARS(t), "command", "unknown", 0);
+					break;
+				}
+			}
+			
 			sdd.r = room;
 			ret_val = script_driver(&sdd, t, WLD_TRIGGER, TRIG_NEW);
 			if (ret_val && obj->carried_by != actor)
@@ -1495,7 +1852,14 @@ int ability_wtrigger(char_data *actor, char_data *vict, obj_data *obj, any_vnum 
 }
 
 
-int leave_wtrigger(room_data *room, char_data *actor, int dir) {
+/**
+* @param room_data *room The room the person is trying to leave.
+* @param char_data *actor The person trying to leave.
+* @param int dir The direction they are trying to go (passed through to %direction%).
+* @param char *custom_dir Optional: A different value for %direction% (may be NULL).
+* @return int 0 = block the leave, 1 = pass
+*/
+int leave_wtrigger(room_data *room, char_data *actor, int dir, char *custom_dir) {
 	trig_data *t;
 	char buf[MAX_INPUT_LENGTH];
 
@@ -1510,9 +1874,9 @@ int leave_wtrigger(room_data *room, char_data *actor, int dir) {
 			union script_driver_data_u sdd;
 			ADD_UID_VAR(buf, t, room_script_id(room), "room", 0);
 			if (dir>=0 && dir < NUM_OF_DIRS)
-				add_var(&GET_TRIG_VARS(t), "direction", (char *)dirs[dir], 0);
+				add_var(&GET_TRIG_VARS(t), "direction", custom_dir ? custom_dir : (char *)dirs[dir], 0);
 			else
-				add_var(&GET_TRIG_VARS(t), "direction", "none", 0);
+				add_var(&GET_TRIG_VARS(t), "direction", custom_dir ? custom_dir : "none", 0);
 			ADD_UID_VAR(buf, t, char_script_id(actor), "actor", 0);
 			sdd.r = room;
 			return script_driver(&sdd, t, WLD_TRIGGER, TRIG_NEW);
@@ -1574,6 +1938,33 @@ void reboot_wtrigger(room_data *room) {
 
 
 /**
+* Checks all triggers for something that would prevent a 'buy'.
+*
+* @param char_data *actor The person trying to buy.
+* @param char_data *shopkeeper The mob shopkeeper, if any (many shops have none).
+* @param obj_data *buying The item being bought.
+* @param int cost The amount to be charged.
+* @param any_vnum currency The currency type (NOTHING for coins).
+* @return bool FALSE means hit-trigger/stop; TRUE means continue buying.
+*/
+bool check_buy_trigger(char_data *actor, char_data *shopkeeper, obj_data *buying, int cost, any_vnum currency) {
+	int cont = 1;
+	
+	cont = buy_wtrigger(actor, shopkeeper, buying, cost, currency);	// world trigs
+	if (cont) {
+		cont = buy_mtrigger(actor, shopkeeper, buying, cost, currency);	// mob trigs
+	}
+	if (cont) {
+		cont = buy_otrigger(actor, shopkeeper, buying, cost, currency);	// obj trigs
+	}
+	if (cont) {
+		cont = buy_vtrigger(actor, shopkeeper, buying, cost, currency);	// vehicles
+	}
+	return cont;
+}
+
+
+/**
 * Checks all triggers for a command match.
 *
 * @param char_data *actor The person typing a command.
@@ -1590,7 +1981,7 @@ bool check_command_trigger(char_data *actor, char *cmd, char *argument, int mode
 	}
 	
 	// never override the toggle command for immortals
-	if (IS_IMMORTAL(actor) && is_abbrev(cmd, "toggle")) {
+	if (IS_IMMORTAL(actor) && is_abbrev(cmd, "toggles")) {
 		return cont;
 	}
 
@@ -1610,6 +2001,69 @@ bool check_command_trigger(char_data *actor, char *cmd, char *argument, int mode
 
  //////////////////////////////////////////////////////////////////////////////
 //// VEHICLE TRIGGERS ////////////////////////////////////////////////////////
+
+/**
+* Buy trigger (vehicle): fires when someone tries to buy
+*
+* @param char_data *actor The person trying to buy.
+* @param char_data *shopkeeper The mob shopkeeper, if any (many shops have none).
+* @param obj_data *buying The item being bought.
+* @param int cost The amount to be charged.
+* @param any_vnum currency The currency type (NOTHING for coins).
+* @return int 0 if a trigger blocked the buy (stop); 1 if not (ok to continue).
+*/
+int buy_vtrigger(char_data *actor, char_data *shopkeeper, obj_data *buying, int cost, any_vnum currency) {
+	union script_driver_data_u sdd;
+	vehicle_data *veh, *next_veh;
+	char buf[MAX_INPUT_LENGTH];
+	trig_data *t;
+
+	// gods not affected
+	if (!valid_dg_target(actor, DG_ALLOW_GODS)) {
+		return 1;
+	}
+	
+	LL_FOREACH_SAFE2(ROOM_VEHICLES(IN_ROOM(actor)), veh, next_veh, next_in_room) {
+		if (!SCRIPT_CHECK(veh, VTRIG_BUY)) {
+			continue;
+		}
+		
+		LL_FOREACH(TRIGGERS(SCRIPT(veh)), t) {
+			if (!TRIGGER_CHECK(t, VTRIG_BUY)) {
+				continue;
+			}
+			
+			// vars
+			ADD_UID_VAR(buf, t, char_script_id(actor), "actor", 0);
+			ADD_UID_VAR(buf, t, obj_script_id(buying), "obj", 0);
+			if (shopkeeper) {
+				ADD_UID_VAR(buf, t, char_script_id(shopkeeper), "shopkeeper", 0);
+			}
+			else {
+				add_var(&GET_TRIG_VARS(t), "shopkeeper", "", 0);
+			}
+			
+			snprintf(buf, sizeof(buf), "%d", cost);
+			add_var(&GET_TRIG_VARS(t), "cost", buf, 0);
+			
+			if (currency == NOTHING) {
+				strcpy(buf, "coins");
+			}
+			else {
+				snprintf(buf, sizeof(buf), "%d", currency);
+			}
+			add_var(&GET_TRIG_VARS(t), "currency", buf, 0);
+			
+			// run it
+			sdd.v = veh;
+			if (!script_driver(&sdd, t, VEH_TRIGGER, TRIG_NEW)) {
+				return 0;
+			}
+		}
+	}
+
+	return 1;
+}
 
 
 /**
@@ -1744,7 +2198,13 @@ int greet_vtrigger(char_data *actor, int dir) {
 }
 
 
-int leave_vtrigger(char_data *actor, int dir) {
+/**
+* @param char_data *actor The person trying to leave.
+* @param int dir The direction they are trying to go (passed through to %direction%).
+* @param char *custom_dir Optional: A different value for %direction% (may be NULL).
+* @return int 0 = block the leave, 1 = pass
+*/
+int leave_vtrigger(char_data *actor, int dir, char *custom_dir) {
 	vehicle_data *veh, *next_veh;
 	char buf[MAX_INPUT_LENGTH];
 	trig_data *t;
@@ -1762,10 +2222,10 @@ int leave_vtrigger(char_data *actor, int dir) {
 			if (IS_SET(GET_TRIG_TYPE(t), VTRIG_LEAVE) && !GET_TRIG_DEPTH(t) && (number(1, 100) <= GET_TRIG_NARG(t))) {
 				union script_driver_data_u sdd;
 				if ( dir >= 0 && dir < NUM_OF_DIRS) {
-					add_var(&GET_TRIG_VARS(t), "direction", (char *)dirs[dir], 0);
+					add_var(&GET_TRIG_VARS(t), "direction", custom_dir ? custom_dir : (char *)dirs[dir], 0);
 				}
 				else {
-					add_var(&GET_TRIG_VARS(t), "direction", "none", 0);
+					add_var(&GET_TRIG_VARS(t), "direction", custom_dir ? custom_dir : "none", 0);
 				}
 				ADD_UID_VAR(buf, t, char_script_id(actor), "actor", 0);
 				sdd.v = veh;
@@ -2391,5 +2851,240 @@ int check_finish_quest_trigger(char_data *actor, quest_data *quest, struct insta
 			}
 		}
 	}
+	return val;
+}
+
+
+ //////////////////////////////////////////////////////////////////////////////
+//// RESET TRIGGER HELPER ////////////////////////////////////////////////////
+
+// runs room reset triggers on a loop
+EVENTFUNC(run_reset_triggers) {
+	struct room_event_data *data = (struct room_event_data *)event_obj;
+	room_data *room;
+	
+	// grab data but don't free (we usually reschedule this)
+	room = data->room;
+	
+	// still have any?
+	if (IS_ADVENTURE_ROOM(room) || !SCRIPT_CHECK(room, WTRIG_RESET)) {
+		delete_stored_event_room(room, SEV_RESET_TRIGGER);
+		free(data);
+		return 0;
+	}
+	
+	reset_wtrigger(room);
+	return (7.5 * 60) RL_SEC;	// reenqueue for the original time
+}
+
+
+/**
+* Checks if a building is a tavern and can run. If so, sets up the data for
+* it and schedules the event. If not, it clears that data.
+*
+* @param room_data *room The room to check for tavernness.
+* @param bool random_offest If TRUE, throws in some random in the 1st timer.
+*/
+void check_reset_trigger_event(room_data *room, bool random_offset) {
+	struct room_event_data *data;
+	struct dg_event *ev;
+	int mins;
+	
+	if (!IS_ADVENTURE_ROOM(room) && SCRIPT_CHECK(room, WTRIG_RESET)) {
+		if (!find_stored_event_room(room, SEV_RESET_TRIGGER)) {
+			CREATE(data, struct room_event_data, 1);
+			data->room = room;
+			
+			// schedule every 7.5 minutes
+			mins = 7.5 - (random_offset ? number(0,6) : 0);
+			ev = dg_event_create(run_reset_triggers, (void*)data, (mins * 60) RL_SEC);
+			add_stored_event_room(room, SEV_RESET_TRIGGER, ev);
+		}
+	}
+	else {
+		cancel_stored_event_room(room, SEV_RESET_TRIGGER);
+	}
+}
+
+
+ //////////////////////////////////////////////////////////////////////////////
+//// KILL TRIGGER FUNCS //////////////////////////////////////////////////////
+
+/**
+* Runs kill triggers for everyone involved in the kill -- the killer, their
+* allies, and all items possessed by those people. Additionally, vehicles also
+* fire kill triggers if they cause the kill, even if they are not in the same
+* room.
+*
+* Kill triggers will not fire if a person kills himself.
+*
+* @param char_data *dying The person who has died.
+* @param char_data *killer Optional: Person who killed them.
+* @param vehicle_data *veh_killer Optional: Vehicle who killed them.
+* @return int The return value of a script (1 is normal, 0 suppresses the death cry).
+*/
+int run_kill_triggers(char_data *dying, char_data *killer, vehicle_data *veh_killer) {
+	extern bool is_fight_ally(char_data *ch, char_data *frenemy);	// fight.c
+	
+	union script_driver_data_u sdd;
+	char_data *ch_iter, *next_ch;
+	trig_data *trig, *next_trig;
+	char buf[MAX_INPUT_LENGTH];
+	room_data *room;
+	int pos;
+	
+	int val = 1;	// default return value
+	
+	if (!dying) {
+		return val;	// somehow
+	}
+	
+	// store this, in case it changes during any script
+	room = IN_ROOM(dying);
+	
+	if (killer && killer != dying) {
+		// check characters first:
+		LL_FOREACH_SAFE2(ROOM_PEOPLE(room), ch_iter, next_ch, next_in_room) {
+			if (EXTRACTED(ch_iter) || IS_DEAD(ch_iter) || !SCRIPT_CHECK(ch_iter, MTRIG_KILL)) {
+				continue;
+			}
+			if (ch_iter == dying) {
+				continue;	// cannot fire if killing self
+			}
+			if (ch_iter != killer && !is_fight_ally(ch_iter, killer)) {
+				continue;	// is not on the killing team
+			}
+			LL_FOREACH_SAFE(TRIGGERS(SCRIPT(ch_iter)), trig, next_trig) {
+				if (AFF_FLAGGED(ch_iter, AFF_CHARM) && !TRIGGER_CHECK(trig, MTRIG_CHARMED)) {
+					continue;	// cannot do while charmed
+				}
+				if (!TRIGGER_CHECK(trig, MTRIG_KILL) || (number(1, 100) > GET_TRIG_NARG(trig))) {
+					continue;	// wrong trig or failed random percent
+				}
+			
+				// ok:
+				memset((char *) &sdd, 0, sizeof(union script_driver_data_u));
+				ADD_UID_VAR(buf, trig, char_script_id(dying), "actor", 0);
+				if (killer) {
+					ADD_UID_VAR(buf, trig, char_script_id(killer), "killer", 0);
+				}
+				else {
+					add_var(&GET_TRIG_VARS(trig), "killer", "", 0);
+				}
+				sdd.c = ch_iter;
+			
+				// run it -- any script returning 0 guarantees we will return 0
+				val &= script_driver(&sdd, trig, MOB_TRIGGER, TRIG_NEW);
+			}
+		}
+		
+		// check gear on characters present, IF they are on the killing team:
+		LL_FOREACH_SAFE2(ROOM_PEOPLE(room), ch_iter, next_ch, next_in_room) {
+			if (EXTRACTED(ch_iter) || IS_DEAD(ch_iter)) {
+				continue;	// cannot benefit if dead
+			}
+			if (ch_iter != killer && !is_fight_ally(ch_iter, killer)) {
+				continue;	// is not on the killing team
+			}
+			
+			// equipped
+			for (pos = 0; pos < NUM_WEARS; ++pos) {
+				if (!GET_EQ(ch_iter, pos)) {
+					continue;	// no item
+				}
+				
+				// ok:
+				val &= kill_otrigger(GET_EQ(ch_iter, pos), dying, killer);
+			}
+			
+			// inventory:
+			val &= kill_otrigger(ch_iter->carrying, dying, killer);
+		}
+	}
+	
+	// and the vehicle
+	if (veh_killer && SCRIPT_CHECK(veh_killer, VTRIG_KILL)) {
+		LL_FOREACH_SAFE(TRIGGERS(SCRIPT(veh_killer)), trig, next_trig) {
+			if (!TRIGGER_CHECK(trig, VTRIG_KILL) || (number(1, 100) > GET_TRIG_NARG(trig))) {
+				continue;	// wrong trig or failed random percent
+			}
+			
+			// ok:
+			memset((char *) &sdd, 0, sizeof(union script_driver_data_u));
+			ADD_UID_VAR(buf, trig, char_script_id(dying), "actor", 0);
+			ADD_UID_VAR(buf, trig, veh_script_id(veh_killer), "killer", 0);
+			sdd.v = veh_killer;
+		
+			// run it -- any script returning 0 guarantees we will return 0
+			val &= script_driver(&sdd, trig, VEH_TRIGGER, TRIG_NEW);
+		}
+	}
+	
+	return val;
+}
+
+
+/**
+* Runs kill triggers on a single object, then on its next contents
+* (recursively). This function is called by run_kill_triggers, which has
+* already validated that the owner of the object qualifies as either the killer
+* or an ally of the killer.
+*
+* @param obj_data *obj The object possibly running triggers.
+* @param char_data *dying The person who has died.
+* @param char_data *killer Optional: Person who killed them.
+* @return int The return value of a script (1 is normal, 0 suppresses the death cry).
+*/
+int kill_otrigger(obj_data *obj, char_data *dying, char_data *killer) {
+	obj_data *next_contains, *next_inside;
+	union script_driver_data_u sdd;
+	trig_data *trig, *next_trig;
+	int val = 1;	// default value
+	
+	if (!obj) {
+		return val;	// often called with no obj
+	}
+	
+	// save for later
+	next_contains = obj->contains;
+	next_inside = obj->next_content;
+	
+	// run script if possible...
+	if (SCRIPT_CHECK(obj, OTRIG_KILL)) {
+		LL_FOREACH_SAFE(TRIGGERS(SCRIPT(obj)), trig, next_trig) {
+			if (!TRIGGER_CHECK(trig, OTRIG_KILL) || (number(1, 100) > GET_TRIG_NARG(trig))) {
+				continue;	// wrong trig or failed random percent
+			}
+			
+			// ok:
+			memset((char *) &sdd, 0, sizeof(union script_driver_data_u));
+			ADD_UID_VAR(buf, trig, char_script_id(dying), "actor", 0);
+			if (killer) {
+				ADD_UID_VAR(buf, trig, char_script_id(killer), "killer", 0);
+			}
+			else {
+				add_var(&GET_TRIG_VARS(trig), "killer", "", 0);
+			}
+			sdd.o = obj;
+			
+			// run it -- any script returning 0 guarantees we will return 0
+			val &= script_driver(&sdd, trig, OBJ_TRIGGER, TRIG_NEW);
+			
+			// ensure obj is safe
+			obj = sdd.o;
+			if (!obj) {
+				break;	// cannot run more triggers -- obj is gone
+			}
+		}
+	}
+	
+	// run recursively
+	if (next_contains) {
+		val &= kill_otrigger(next_contains, dying, killer);
+	}
+	if (next_inside) {
+		val &= kill_otrigger(next_inside, dying, killer);
+	}
+	
 	return val;
 }

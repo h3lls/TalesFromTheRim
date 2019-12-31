@@ -38,16 +38,17 @@
 extern bool can_get_quest_from_room(char_data *ch, room_data *room, struct quest_temp_list **build_list);
 extern bool can_get_quest_from_obj(char_data *ch, obj_data *obj, struct quest_temp_list **build_list);
 extern bool can_get_quest_from_mob(char_data *ch, char_data *mob, struct quest_temp_list **build_list);
+extern bool can_get_quest_from_vehicle(char_data *ch, vehicle_data *veh, struct quest_temp_list **build_list);
 extern bool char_meets_prereqs(char_data *ch, quest_data *quest, struct instance_data *instance);
 extern struct req_data *copy_requirements(struct req_data *from);
 void free_player_quests(struct player_quest *list);
 void free_quest_temp_list(struct quest_temp_list *list);
 extern struct instance_data *get_instance_by_id(any_vnum instance_id);
+void give_quest_rewards(char_data *ch, struct quest_reward *list, int reward_level, empire_data *quest_giver_emp, int instance_id);
 extern struct player_quest *is_on_quest(char_data *ch, any_vnum quest);
 void refresh_one_quest_tracker(char_data *ch, struct player_quest *pq);
 void remove_quest_items_by_quest(char_data *ch, any_vnum vnum);
 extern char *requirement_string(struct req_data *task, bool show_vnums);
-void scale_item_to_level(obj_data *obj, int level);
 
 // local prototypes
 void drop_quest(char_data *ch, struct player_quest *pq);
@@ -70,6 +71,7 @@ void start_quest(char_data *ch, quest_data *qst, struct instance_data *inst);
 */
 struct quest_temp_list *build_available_quest_list(char_data *ch) {
 	struct quest_temp_list *quest_list = NULL;
+	vehicle_data *veh;
 	char_data *mob;
 	obj_data *obj;
 	
@@ -91,6 +93,11 @@ struct quest_temp_list *build_available_quest_list(char_data *ch) {
 		if (IS_NPC(mob)) {
 			can_get_quest_from_mob(ch, mob, &quest_list);
 		}
+	}
+	
+	// search vehicles in room
+	LL_FOREACH2(ROOM_VEHICLES(IN_ROOM(ch)), veh, next_in_room) {
+		can_get_quest_from_vehicle(ch, veh, &quest_list);
 	}
 	
 	return quest_list;
@@ -136,13 +143,10 @@ const char *color_by_difficulty(char_data *ch, int level) {
 * @param empire_data *giver_emp The empire of the quest-giver, if any.
 */
 void complete_quest(char_data *ch, struct player_quest *pq, empire_data *giver_emp) {
-	void clear_char_abilities(char_data *ch, any_vnum skill);
 	void extract_required_items(char_data *ch, struct req_data *list);
 	
 	quest_data *quest = quest_proto(pq->vnum);
 	struct player_completed_quest *pcq;
-	char buf[MAX_STRING_LENGTH];
-	struct quest_reward *reward;
 	any_vnum vnum;
 	int level;
 	
@@ -196,101 +200,7 @@ void complete_quest(char_data *ch, struct player_quest *pq, empire_data *giver_e
 	}
 	
 	// give rewards
-	LL_FOREACH(QUEST_REWARDS(quest), reward) {
-		// QR_x: reward the rewards
-		switch (reward->type) {
-			case QR_BONUS_EXP: {
-				msg_to_char(ch, "\tyYou gain %d bonus experience point%s! (Bonus exp expires at the end of the day.)\t0\r\n", reward->amount, PLURAL(reward->amount));
-				SAFE_ADD(GET_DAILY_BONUS_EXPERIENCE(ch), reward->amount, 0, UCHAR_MAX, FALSE);
-				break;
-			}
-			case QR_COINS: {
-				empire_data *coin_emp = (reward->vnum == OTHER_COIN ? NULL : giver_emp);
-				msg_to_char(ch, "\tyYou receive %s!\t0\r\n", money_amount(coin_emp, reward->amount));
-				increase_coins(ch, coin_emp, reward->amount);
-				break;
-			}
-			case QR_OBJECT: {
-				obj_data *obj = NULL;
-				int iter;
-				for (iter = 0; iter < reward->amount; ++iter) {
-					obj = read_object(reward->vnum, TRUE);
-					scale_item_to_level(obj, level);
-					if (CAN_WEAR(obj, ITEM_WEAR_TAKE)) {
-						obj_to_char(obj, ch);
-					}
-					else {
-						obj_to_room(obj, IN_ROOM(ch));
-					}
-					
-					// ensure binding
-					if (!IS_NPC(ch) && OBJ_FLAGGED(obj, OBJ_BIND_FLAGS)) {
-						bind_obj_to_player(obj, ch);
-						reduce_obj_binding(obj, ch);
-					}
-					
-					load_otrigger(obj);
-				}
-				
-				if (reward->amount > 0) {
-					snprintf(buf, sizeof(buf), "\tyYou receive $p (x%d)!\t0", reward->amount);
-				}
-				else {
-					snprintf(buf, sizeof(buf), "\tyYou receive $p!\t0");
-				}
-				
-				if (obj) {
-					act(buf, FALSE, ch, obj, NULL, TO_CHAR);
-				}
-				break;
-			}
-			case QR_SET_SKILL: {
-				int val = MAX(0, MIN(CLASS_SKILL_CAP, reward->amount));
-				bool loss;
-				
-				loss = (val < get_skill_level(ch, reward->vnum));
-				set_skill(ch, reward->vnum, val);
-				
-				msg_to_char(ch, "\tyYour %s is now level %d!\t0\r\n", get_skill_name_by_vnum(reward->vnum), val);
-				
-				if (loss) {
-					clear_char_abilities(ch, reward->vnum);
-				}
-				
-				break;
-			}
-			case QR_SKILL_EXP: {
-				msg_to_char(ch, "\tyYou gain %s skill experience!\t0\r\n", get_skill_name_by_vnum(reward->vnum));
-				gain_skill_exp(ch, reward->vnum, reward->amount);
-				break;
-			}
-			case QR_SKILL_LEVELS: {
-				if (gain_skill(ch, find_skill_by_vnum(reward->vnum), reward->amount)) {
-					// sends its own message
-					// msg_to_char(ch, "Your %s is now level %d!\r\n", get_skill_name_by_vnum(reward->vnum), get_skill_level(ch, reward->vnum));
-				}
-				break;
-			}
-			case QR_QUEST_CHAIN: {
-				quest_data *start = quest_proto(reward->vnum);
-				struct instance_data *inst = get_instance_by_id(pcq->last_instance_id);
-				
-				// shows nothing if the player doesn't qualify
-				if (start && !is_on_quest(ch, reward->vnum) && char_meets_prereqs(ch, start, inst)) {
-					if (!PRF_FLAGGED(ch, PRF_COMPACT)) {
-						msg_to_char(ch, "\r\n");	// add some spacing
-					}
-					start_quest(ch, start, inst);
-				}
-				
-				break;
-			}
-			case QR_REPUTATION: {
-				gain_reputation(ch, reward->vnum, reward->amount, FALSE, TRUE);
-				break;
-			}
-		}
-	}
+	give_quest_rewards(ch, QUEST_REWARDS(quest), level, giver_emp, pq->instance_id);
 	
 	// dailies:
 	if (QUEST_FLAGGED(quest, QST_DAILY)) {
@@ -308,12 +218,15 @@ void complete_quest(char_data *ch, struct player_quest *pq, empire_data *giver_e
 * Returns the complete/total numbers for the quest tasks the player is
 * closest to completing. If a quest has multiple "or" conditions, it picks
 * the best one.
+*
+* This function also works on empire progression goals, and any other list
+* of tracked requirements.
 * 
-* @param struct player_quest *pq The player-quest entry to count.
+* @param struct req_data *list The list of requirements to check.
 * @param int *complete A variable to store the # of complete tasks.
 * @param int *total A vartiable to store the total # of tasks.
 */
-void count_quest_tasks(struct player_quest *pq, int *complete, int *total) {
+void count_quest_tasks(struct req_data *list, int *complete, int *total) {
 	// helper struct
 	struct count_quest_data {
 		int group;	// converted from "char"
@@ -327,10 +240,15 @@ void count_quest_tasks(struct player_quest *pq, int *complete, int *total) {
 	struct req_data *task;
 	bool done = FALSE;
 	
+	if (!list) {	// shortcut for no tasks
+		*complete = *total = 1;
+		return;
+	}
+	
 	// prepare data
 	*complete = *total = 0;
 	
-	LL_FOREACH(pq->tracker, task) {
+	LL_FOREACH(list, task) {
 		if (!task->group) {	// ungrouped "or" tasks
 			if (task->current >= task->needed) {
 				// found a complete "or"
@@ -375,6 +293,7 @@ void count_quest_tasks(struct player_quest *pq, int *complete, int *total) {
 		}
 		
 		// clean up data
+		HASH_DEL(cqd_list, cqd);
 		free(cqd);
 	}
 	
@@ -445,7 +364,7 @@ quest_data *find_local_quest_by_name(char_data *ch, char *argument, bool check_c
 				*find_inst = get_instance_by_id(pq->instance_id);
 				return quest;
 			}
-			else if (!abbrev && is_multiword_abbrev(argument, QUEST_NAME(quest))) {
+			else if (!abbrev && multi_isname(argument, QUEST_NAME(quest))) {
 				abbrev = quest;
 				abbrev_inst = get_instance_by_id(pq->instance_id);
 			}
@@ -466,7 +385,7 @@ quest_data *find_local_quest_by_name(char_data *ch, char *argument, bool check_c
 				*find_inst = inst;
 				return quest;
 			}
-			else if (!abbrev && is_multiword_abbrev(argument, QUEST_NAME(quest))) {
+			else if (!abbrev && multi_isname(argument, QUEST_NAME(quest))) {
 				abbrev = quest;
 				abbrev_inst = inst;
 			}
@@ -553,7 +472,7 @@ char *show_daily_quest_line(char_data *ch) {
 		snprintf(output, sizeof(output), "You can complete %d more daily quest%s today.", amount, PLURAL(amount));
 	}
 	else {
-		snprintf(output, sizeof(output), "You have completed all your daily quests for the day.\r\n");
+		snprintf(output, sizeof(output), "You have completed all your daily quests for the day.");
 	}
 	
 	return output;
@@ -565,54 +484,11 @@ char *show_daily_quest_line(char_data *ch) {
 * @param struct player_quest *pq The quest to show the tracker for.
 */
 void show_quest_tracker(char_data *ch, struct player_quest *pq) {
-	extern const bool requirement_amt_type[];
-	
-	int lefthand, count = 0, sub = 0;
+	void get_tracker_display(struct req_data *tracker, char *save_buffer);
 	char buf[MAX_STRING_LENGTH];
-	struct req_data *task;
-	char last_group = 0;
 	
-	msg_to_char(ch, "Quest Tracker:\r\n");
-	
-	LL_FOREACH(pq->tracker, task) {
-		if (last_group != task->group) {
-			if (task->group) {
-				msg_to_char(ch, "  %sAll of:\r\n", (count > 0 ? "or " : ""));
-			}
-			last_group = task->group;
-			sub = 0;
-		}
-		
-		++count;	// total iterations
-		++sub;	// iterations inside this sub-group
-		
-		// REQ_AMT_x: display based on amount type
-		switch (requirement_amt_type[task->type]) {
-			case REQ_AMT_NUMBER: {
-				lefthand = task->current;
-				lefthand = MIN(lefthand, task->needed);	// may be above the amount needed
-				lefthand = MAX(0, lefthand);	// in some cases, current may be negative
-				sprintf(buf, " (%d/%d)", lefthand, task->needed);
-				break;
-			}
-			case REQ_AMT_REPUTATION:
-			case REQ_AMT_THRESHOLD:
-			case REQ_AMT_NONE: {
-				if (task->current >= task->needed) {
-					strcpy(buf, " (complete)");
-				}
-				else {
-					strcpy(buf, " (not complete)");
-				}
-				break;
-			}
-			default: {
-				*buf = '\0';
-				break;
-			}
-		}
-		msg_to_char(ch, "  %s%s%s%s\r\n", (task->group ? "  " : ""), ((sub > 1 && !task->group) ? "or " : ""), requirement_string(task, FALSE), buf);
-	}
+	get_tracker_display(pq->tracker, buf);
+	msg_to_char(ch, "Quest Tracker:\r\n%s", buf);
 }
 
 
@@ -649,15 +525,15 @@ void start_quest(char_data *ch, quest_data *qst, struct instance_data *inst) {
 	pq->vnum = QUEST_VNUM(qst);
 	pq->version = QUEST_VERSION(qst);
 	pq->start_time = time(0);
-	pq->instance_id = inst ? inst->id : NOTHING;
-	pq->adventure = inst ? GET_ADV_VNUM(inst->adventure) : NOTHING;
+	pq->instance_id = inst ? INST_ID(inst) : NOTHING;
+	pq->adventure = inst ? GET_ADV_VNUM(INST_ADVENTURE(inst)) : NOTHING;
 	pq->tracker = copy_requirements(QUEST_TASKS(qst));
 	
 	LL_PREPEND(GET_QUESTS(ch), pq);
 	refresh_one_quest_tracker(ch, pq);
 	qt_start_quest(ch, QUEST_VNUM(qst));
 	
-	count_quest_tasks(pq, &count, &total);
+	count_quest_tasks(pq->tracker, &count, &total);
 	if (count == total) {
 		msg_to_char(ch, "You already meet the requirements for %s%s\t0.\r\n", QUEST_LEVEL_COLOR(ch, qst), QUEST_NAME(qst));
 	}
@@ -714,6 +590,7 @@ bool qcmd_finish_one(char_data *ch, struct player_quest *pq, bool show_errors) {
 	extern int check_finish_quest_trigger(char_data *actor, quest_data *quest, struct instance_data *inst);
 	
 	quest_data *quest = quest_proto(pq->vnum);
+	struct group_member_data *mem;
 	empire_data *giver_emp = NULL;
 	int complete, total;
 	
@@ -723,22 +600,9 @@ bool qcmd_finish_one(char_data *ch, struct player_quest *pq, bool show_errors) {
 		}
 		return FALSE;
 	}
-	if (!can_turn_in_quest_at(ch, IN_ROOM(ch), quest, &giver_emp)) {
-		if (show_errors) {
-			msg_to_char(ch, "You can't turn that quest in here.\r\n");
-		}
-		return FALSE;
-	}
-	if (QUEST_FLAGGED(quest, QST_DAILY) && GET_DAILY_QUESTS(ch) >= config_get_int("dailies_per_day")) {
-		if (show_errors) {
-			msg_to_char(ch, "You can't finish any more daily quests today.\r\n");
-		}
-		return FALSE;
-	}
-	
 	
 	// preliminary completeness check
-	count_quest_tasks(pq, &complete, &total);
+	count_quest_tasks(pq->tracker, &complete, &total);
 	if (complete < total) {
 		if (show_errors) {
 			msg_to_char(ch, "That quest is not complete.\r\n");
@@ -746,9 +610,23 @@ bool qcmd_finish_one(char_data *ch, struct player_quest *pq, bool show_errors) {
 		return FALSE;
 	}
 	
-	// 2nd check after refreshing tasks
+	// 2nd checks: completability
+	if (QUEST_FLAGGED(quest, QST_DAILY) && GET_DAILY_QUESTS(ch) >= config_get_int("dailies_per_day")) {
+		if (show_errors) {
+			msg_to_char(ch, "You can't finish any more daily quests today.\r\n");
+		}
+		return FALSE;
+	}
+	if (!can_turn_in_quest_at(ch, IN_ROOM(ch), quest, &giver_emp)) {
+		if (show_errors) {
+			msg_to_char(ch, "You can't turn that quest in here.\r\n");
+		}
+		return FALSE;
+	}
+	
+	// 3rd check after refreshing tasks
 	refresh_one_quest_tracker(ch, pq);
-	count_quest_tasks(pq, &complete, &total);
+	count_quest_tasks(pq->tracker, &complete, &total);
 	if (complete < total) {
 		if (show_errors) {
 			msg_to_char(ch, "That quest is not complete.\r\n");
@@ -763,6 +641,16 @@ bool qcmd_finish_one(char_data *ch, struct player_quest *pq, bool show_errors) {
 	
 	// SUCCESS
 	complete_quest(ch, pq, giver_emp);
+	
+	// group completion
+	if (QUEST_FLAGGED(quest, QST_GROUP_COMPLETION) && GROUP(ch)) {
+		LL_FOREACH(GROUP(ch)->members, mem) {
+			if (mem->member != ch && !IS_NPC(mem->member) && IN_ROOM(mem->member) == IN_ROOM(ch) && (pq = is_on_quest(mem->member, QUEST_VNUM(quest)))) {
+				complete_quest(mem->member, pq, giver_emp);
+			}
+		}
+	}
+	
 	return TRUE;
 }
 
@@ -841,7 +729,7 @@ QCMD(qcmd_group) {
 			friend = mem->member;
 			
 			if (!IS_NPC(friend) && friend != ch && (fq = is_on_quest(friend, pq->vnum))) {
-				count_quest_tasks(fq, &count, &total);
+				count_quest_tasks(fq->tracker, &count, &total);
 				snprintf(line + strlen(line), sizeof(line) - strlen(line), "%s%s (%d/%d)", (any ? ", " : ""), GET_NAME(friend), count, total);
 				any = TRUE;
 			}
@@ -867,7 +755,7 @@ QCMD(qcmd_group) {
 
 QCMD(qcmd_info) {
 	extern char *quest_giver_string(struct quest_giver *giver, bool show_vnums);
-	char buf[MAX_STRING_LENGTH], *buf2;
+	char buf[MAX_STRING_LENGTH], *buf2, vstr[128];
 	struct instance_data *inst;
 	struct quest_giver *giver;
 	struct player_quest *pq;
@@ -881,15 +769,22 @@ QCMD(qcmd_info) {
 		msg_to_char(ch, "You don't see a quest called '%s' here.\r\n", argument);
 	}
 	else {
+		if (PRF_FLAGGED(ch, PRF_ROOMFLAGS)) {
+			sprintf(vstr, "[%5d] ", QUEST_VNUM(qst));
+		}
+		else {
+			*vstr = '\0';
+		}
+		
 		pq = is_on_quest(ch, QUEST_VNUM(qst));
 		
 		// title
 		if (pq) {
-			count_quest_tasks(pq, &complete, &total);
-			msg_to_char(ch, "%s%s\t0 (%d/%d task%s)\r\n", QUEST_LEVEL_COLOR(ch, qst), QUEST_NAME(qst), complete, total, PLURAL(total));
+			count_quest_tasks(pq->tracker, &complete, &total);
+			msg_to_char(ch, "%s%s%s\t0 (%d/%d task%s)\r\n", vstr, QUEST_LEVEL_COLOR(ch, qst), QUEST_NAME(qst), complete, total, PLURAL(total));
 		}
 		else {
-			msg_to_char(ch, "%s%s\t0 (not on quest)\r\n", QUEST_LEVEL_COLOR(ch, qst), QUEST_NAME(qst));
+			msg_to_char(ch, "%s%s%s\t0 (not on quest)\r\n", vstr, QUEST_LEVEL_COLOR(ch, qst), QUEST_NAME(qst));
 		}
 		
 		send_to_char(NULLSAFE(QUEST_DESCRIPTION(qst)), ch);
@@ -924,12 +819,16 @@ QCMD(qcmd_info) {
 			
 			msg_to_char(ch, "Turn in at: %s.\r\n", buf);
 		}
+		
+		if (QUEST_FLAGGED(qst, QST_GROUP_COMPLETION)) {
+			msg_to_char(ch, "Group completion: This quest will auto-complete if any member of your group completes it while you're present.\r\n");
+		}
 	}
 }
 
 
 QCMD(qcmd_list) {
-	char buf[MAX_STRING_LENGTH];
+	char buf[MAX_STRING_LENGTH], vstr[128];
 	struct player_quest *pq;
 	quest_data *proto;
 	int count, total;
@@ -942,9 +841,15 @@ QCMD(qcmd_list) {
 	
 	size = snprintf(buf, sizeof(buf), "Your quests:\r\n");
 	LL_FOREACH(GET_QUESTS(ch), pq) {
-		count_quest_tasks(pq, &count, &total);
+		count_quest_tasks(pq->tracker, &count, &total);
 		if ((proto = quest_proto(pq->vnum))) {
-			size += snprintf(buf + size, sizeof(buf) - size, "  %s%s\t0 (%d/%d task%s%s)\r\n", QUEST_LEVEL_COLOR(ch, proto), QUEST_NAME(proto), count, total, PLURAL(total), QUEST_FLAGGED(proto, QST_DAILY) ? "; daily" : "");
+			if (PRF_FLAGGED(ch, PRF_ROOMFLAGS)) {
+				sprintf(vstr, "[%5d] ", QUEST_VNUM(proto));
+			}
+			else {
+				*vstr = '\0';
+			}
+			size += snprintf(buf + size, sizeof(buf) - size, "  %s%s%s\t0 (%d/%d task%s%s)\r\n", vstr, QUEST_LEVEL_COLOR(ch, proto), QUEST_NAME(proto), count, total, PLURAL(total), QUEST_FLAGGED(proto, QST_DAILY) ? "; daily" : "");
 		}
 	}
 	
@@ -980,7 +885,7 @@ QCMD(qcmd_share) {
 	// look up instance (re-use the 'inst' var, which was junk above)
 	// we need the same instance for the other players here
 	inst = get_instance_by_id(pq->instance_id);
-	if (inst && GET_ADV_VNUM(inst->adventure) != pq->adventure) {
+	if (inst && GET_ADV_VNUM(INST_ADVENTURE(inst)) != pq->adventure) {
 		inst = NULL;
 	}
 	
@@ -1018,9 +923,11 @@ QCMD(qcmd_share) {
 
 
 QCMD(qcmd_start) {
+	extern struct player_quest *is_on_quest_by_name(char_data *ch, char *argument);
+	
 	struct quest_temp_list *qtl, *quest_list = NULL;
 	struct instance_data *inst = NULL;
-	char buf[MAX_STRING_LENGTH];
+	char buf[MAX_STRING_LENGTH], vstr[128];
 	quest_data *qst;
 	bool any;
 	
@@ -1043,8 +950,15 @@ QCMD(qcmd_start) {
 			else {
 				*buf = '\0';
 			}
-		
-			msg_to_char(ch, "  %s%s%s%s\t0\r\n", QUEST_LEVEL_COLOR(ch, qtl->quest), QUEST_NAME(qtl->quest), buf, QUEST_FLAGGED(qtl->quest, QST_DAILY) ? " (daily)" : "");
+			
+			if (PRF_FLAGGED(ch, PRF_ROOMFLAGS)) {
+				sprintf(vstr, "[%5d] ", QUEST_VNUM(qtl->quest));
+			}
+			else {
+				*vstr = '\0';
+			}
+			
+			msg_to_char(ch, "  %s%s%s%s%s\t0\r\n", vstr, QUEST_LEVEL_COLOR(ch, qtl->quest), QUEST_NAME(qtl->quest), buf, QUEST_FLAGGED(qtl->quest, QST_DAILY) ? " (daily)" : "");
 		}
 	
 		if (!any) {
@@ -1071,6 +985,13 @@ QCMD(qcmd_start) {
 		quest_list = build_available_quest_list(ch);
 		any = FALSE;
 		LL_FOREACH(quest_list, qtl) {
+			if (get_approximate_level(ch) + 50 < QUEST_MIN_LEVEL(qtl->quest)) {
+				continue;	// must validate level
+			}
+			if (QUEST_FLAGGED(qtl->quest, QST_DAILY) && GET_DAILY_QUESTS(ch) >= config_get_int("dailies_per_day")) {
+				continue;	// too many dailies
+			}
+			
 			// must re-check prereqs
 			if (!is_on_quest(ch, QUEST_VNUM(qtl->quest)) && char_meets_prereqs(ch, qtl->quest, qtl->instance)) {
 				if (any) {
@@ -1089,7 +1010,13 @@ QCMD(qcmd_start) {
 		free_quest_temp_list(quest_list);
 	}
 	else if (!(qst = find_local_quest_by_name(ch, argument, FALSE, TRUE, &inst))) {
-		msg_to_char(ch, "You don't see that quest here.\r\n");
+		if (is_on_quest_by_name(ch, argument)) {
+			msg_to_char(ch, "You are already on that quest.\r\n");
+		}
+		else {
+			msg_to_char(ch, "You don't see that quest here.\r\n");
+			qcmd_start(ch, "");	// list quests available here
+		}
 	}
 	else if (QUEST_FLAGGED(qst, QST_DAILY) && GET_DAILY_QUESTS(ch) >= config_get_int("dailies_per_day")) {
 		msg_to_char(ch, "You can't start any more daily quests today.\r\n");

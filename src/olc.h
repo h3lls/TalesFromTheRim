@@ -49,7 +49,11 @@
 #define OLC_QUEST  BIT(19)
 #define OLC_SOCIAL  BIT(20)
 #define OLC_FACTION  BIT(21)
-#define NUM_OLC_TYPES  22
+#define OLC_GENERIC  BIT(22)
+#define OLC_SHOP  BIT(23)
+#define OLC_PROGRESS  BIT(24)
+#define OLC_EVENT  BIT(25)
+#define NUM_OLC_TYPES  26
 
 
 // olc command flags
@@ -74,14 +78,18 @@
 #define OLC_FLAG_NO_GLOBAL  BIT(12)	// cannot edit globals
 #define OLC_FLAG_NO_AUGMENT  BIT(13)	// cannot edit augs
 #define OLC_FLAG_NO_ARCHETYPE  BIT(14)	// cannot edit archetypes
-#define OLC_FLAG_ABILITIES  BIT(15)	// CAN edit abilities
-#define OLC_FLAG_CLASSES  BIT(16)	// CAN edit classes
-#define OLC_FLAG_SKILLS  BIT(17)	// CAN edit skills
+#define OLC_FLAG_NO_ABILITIES  BIT(15)	// CAN edit abilities
+#define OLC_FLAG_NO_CLASSES  BIT(16)	// CAN edit classes
+#define OLC_FLAG_NO_SKILLS  BIT(17)	// CAN edit skills
 #define OLC_FLAG_NO_VEHICLES  BIT(18)	// cannot edit vehicles
 #define OLC_FLAG_NO_MORPHS  BIT(19)	// cannot edit morphs
-#define OLC_FLAG_NO_QUESTS  BIT(19)	// cannot edit quests
-#define OLC_FLAG_NO_SOCIALS  BIT(20)	// cannot edit socials
-#define OLC_FLAG_NO_FACTIONS  BIT(21)	// cannot edit factionss
+#define OLC_FLAG_NO_QUESTS  BIT(20)	// cannot edit quests
+#define OLC_FLAG_NO_SOCIALS  BIT(21)	// cannot edit socials
+#define OLC_FLAG_NO_FACTIONS  BIT(22)	// cannot edit factions
+#define OLC_FLAG_NO_GENERICS  BIT(23)	// cannot edit generics
+#define OLC_FLAG_NO_SHOPS  BIT(24)	// cannot edit shops
+#define OLC_FLAG_NO_PROGRESS  BIT(25)	// cannot edit progress
+#define OLC_FLAG_NO_EVENTS  BIT(26)	// cannot edit events
 
 
 // for trigger editing
@@ -90,6 +98,14 @@
 #define TRIG_ARG_PHRASE_OR_WORDLIST  BIT(2)	// 0 = phrase, 1 = wordlist
 #define TRIG_ARG_COST  BIT(3)
 #define TRIG_ARG_OBJ_WHERE  BIT(4)
+
+
+// these cause the color change on olc labels
+#define OLC_LABEL_CHANGED  (PRF_FLAGGED(ch, PRF_SCREEN_READER) ? "\tg*" : "\tg")
+#define OLC_LABEL_UNCHANGED  "\ty"
+#define OLC_LABEL_STR(cur, dflt)  ((cur && strcmp(cur, dflt)) ? OLC_LABEL_CHANGED : OLC_LABEL_UNCHANGED)
+#define OLC_LABEL_PTR(ptr)  (ptr ? OLC_LABEL_CHANGED : OLC_LABEL_UNCHANGED)
+#define OLC_LABEL_VAL(val, dflt)  (val != dflt ? OLC_LABEL_CHANGED : OLC_LABEL_UNCHANGED)
 
 
 // subcommands for olc
@@ -121,3 +137,61 @@ void smart_copy_interactions(struct interaction_item **addto, struct interaction
 void smart_copy_scripts(struct trig_proto_list **addto, struct trig_proto_list *input);
 void smart_copy_spawns(struct spawn_info **addto, struct spawn_info *input);
 void smart_copy_template_spawns(struct adventure_spawn **addto, struct adventure_spawn *input);
+
+// helpers from other systems
+bool delete_event_reward_from_list(struct event_reward **list, int type, any_vnum vnum);
+bool find_event_reward_in_list(struct event_reward *list, int type, any_vnum vnum);
+
+
+// fullsearch helpers
+
+#define FULLSEARCH_BOOL(string, var)	\
+	else if (is_abbrev(type_arg, "-"string)) {	\
+		var = TRUE;	\
+	}
+
+#define FULLSEARCH_INT(string, var, min, max)	\
+	else if (is_abbrev(type_arg, "-"string)) {	\
+		argument = any_one_word(argument, val_arg);	\
+		if (!isdigit(*val_arg) || (var = atoi(val_arg)) < min || var > max) {	\
+			msg_to_char(ch, "Invalid %s '%s'.\r\n", string, val_arg);	\
+			return;	\
+		}	\
+	}
+
+#define FULLSEARCH_FLAGS(string, var, names)	\
+	else if (is_abbrev(type_arg, "-"string)) {	\
+		int lookup;	\
+		argument = any_one_word(argument, val_arg);	\
+		if ((lookup = search_block(val_arg, names, FALSE)) != NOTHING) {	\
+			var |= BIT(lookup);	\
+		}	\
+		else {	\
+			msg_to_char(ch, "Invalid %s '%s'.\r\n", string, val_arg);	\
+			return;	\
+		}	\
+	}
+
+#define FULLSEARCH_FUNC(string, var, func)	\
+	else if (is_abbrev(type_arg, "-"string)) {	\
+		argument = any_one_word(argument, val_arg);	\
+		if (!(var = (func))) {	\
+			msg_to_char(ch, "Invalid %s '%s'.\r\n", string, val_arg);	\
+			return;	\
+		}	\
+	}
+
+#define FULLSEARCH_LIST(string, var, names)	\
+	else if (is_abbrev(type_arg, "-"string)) {	\
+		argument = any_one_word(argument, val_arg);	\
+		if ((var = search_block(val_arg, names, FALSE)) == NOTHING) {	\
+			msg_to_char(ch, "Invalid %s '%s'.\r\n", string, val_arg);	\
+			return;	\
+		}	\
+	}
+
+#define FULLSEARCH_STRING(string, var)	\
+	else if (is_abbrev(type_arg, "-"string)) {	\
+		argument = any_one_word(argument, val_arg);	\
+		strcpy(var, val_arg);	\
+	}

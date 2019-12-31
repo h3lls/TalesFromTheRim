@@ -86,8 +86,6 @@ OLC_MODULE(mapedit_build) {
 		disassociate_building(IN_ROOM(ch));
 		
 		construct_building(IN_ROOM(ch), GET_BLD_VNUM(bld));
-		special_building_setup(ch, IN_ROOM(ch));
-		complete_building(IN_ROOM(ch));
 		
 		if (dir != NO_DIR) {
 			create_exit(IN_ROOM(ch), SHIFT_DIR(IN_ROOM(ch), dir), dir, FALSE);
@@ -97,6 +95,9 @@ OLC_MODULE(mapedit_build) {
 			COMPLEX_DATA(IN_ROOM(ch))->entrance = rev_dir[dir];
 			herd_animals_out(IN_ROOM(ch));
 		}
+		
+		complete_building(IN_ROOM(ch));
+		special_building_setup(ch, IN_ROOM(ch));
 
 		msg_to_char(ch, "You create %s %s!\r\n", AN(GET_BLD_NAME(bld)), GET_BLD_NAME(bld));
 		sprintf(buf, "$n creates %s %s!", AN(GET_BLD_NAME(bld)), GET_BLD_NAME(bld));
@@ -106,7 +107,8 @@ OLC_MODULE(mapedit_build) {
 
 
 OLC_MODULE(mapedit_decay) {
-	void annual_update_map_tile(room_data *room);	// db.world.c
+	void annual_update_depletions(struct depletion_data **list);	// db.world.c
+	void annual_update_map_tile(struct map_data *tile);	// db.world.c
 	
 	room_data *room = HOME_ROOM(IN_ROOM(ch));
 	
@@ -115,7 +117,8 @@ OLC_MODULE(mapedit_decay) {
 	}
 	else {
 		msg_to_char(ch, "Ok.\r\n");
-		annual_update_map_tile(room);
+		annual_update_map_tile(&(world_map[FLAT_X_COORD(room)][FLAT_Y_COORD(room)]));
+		annual_update_depletions(&(SHARED_DATA(room)->depletion));
 	}
 }
 
@@ -123,16 +126,22 @@ OLC_MODULE(mapedit_decay) {
 OLC_MODULE(mapedit_terrain) {
 	extern crop_data *get_crop_by_name(char *name);
 	extern sector_data *get_sect_by_name(char *name);
+	void finish_trench(room_data *room);
 	
 	struct empire_city_data *city, *temp;
-	empire_data *emp;
+	empire_data *emp, *rescan_emp = NULL;
 	int count;
-	sector_data *sect, *next_sect, *old_sect = NULL;
+	sector_data *sect = NULL, *next_sect, *old_sect = NULL;
 	crop_data *crop, *next_crop;
-	crop_data *cp;
+	crop_data *cp = NULL;
 	
-	sect = get_sect_by_name(argument);
-	cp = get_crop_by_name(argument);
+	if (isdigit(*argument)) {
+		sect = sector_proto(atoi(argument));
+	}
+	else {
+		sect = get_sect_by_name(argument);
+		cp = get_crop_by_name(argument);
+	}
 
 	if (IS_INSIDE(IN_ROOM(ch)) || IS_ADVENTURE_ROOM(IN_ROOM(ch)))
 		msg_to_char(ch, "Leave the building or area first.\r\n");
@@ -158,12 +167,14 @@ OLC_MODULE(mapedit_terrain) {
 
 		// delete city center?
 		if (IS_CITY_CENTER(IN_ROOM(ch)) && emp && (city = find_city_entry(emp, IN_ROOM(ch)))) {
+			log_to_empire(emp, ELOG_TERRITORY, "%s was lost", city->name);
 			REMOVE_FROM_LIST(city, EMPIRE_CITY_LIST(emp), next);
 			if (city->name) {
 				free(city->name);
 			}
 			free(city);
-			save_empire(emp);
+			rescan_emp = emp;
+			EMPIRE_NEEDS_SAVE(emp) = TRUE;
 		}
 		
 		if (sect) {
@@ -192,6 +203,19 @@ OLC_MODULE(mapedit_terrain) {
 		if (IS_ROAD(IN_ROOM(ch))) {
 			change_base_sector(IN_ROOM(ch), old_sect);
 		}
+		
+		if (sect && SECT_FLAGGED(sect, SECTF_IS_TRENCH)) {
+			finish_trench(IN_ROOM(ch));	// fills it or schedules it
+			set_room_extra_data(IN_ROOM(ch), ROOM_EXTRA_TRENCH_ORIGINAL_SECTOR, GET_SECT_VNUM(old_sect));
+		}
+		else {
+			remove_room_extra_data(IN_ROOM(ch), ROOM_EXTRA_TRENCH_ORIGINAL_SECTOR);
+		}
+		
+		// rescan territory at the end
+		if (rescan_emp) {
+			read_empire_territory(rescan_emp, FALSE);
+		}
 	}
 }
 
@@ -206,8 +230,34 @@ OLC_MODULE(mapedit_complete_room) {
 		return;
 	}
 	
+	act("The building knits itself together out of the ether.", FALSE, ch, NULL, NULL, TO_CHAR | TO_ROOM);
 	complete_building(IN_ROOM(ch));
-	msg_to_char(ch, "Complete.\r\n");
+}
+
+
+OLC_MODULE(mapedit_grow) {
+	sector_data *preserve;
+	struct evolution_data *evo;
+	
+	// percentage is checked in the evolution data
+	if ((evo = get_evolution_by_type(SECT(IN_ROOM(ch)), EVO_MAGIC_GROWTH))) {
+		preserve = (BASE_SECT(IN_ROOM(ch)) != SECT(IN_ROOM(ch))) ? BASE_SECT(IN_ROOM(ch)) : NULL;
+		
+		// messaging based on whether or not it's choppable
+		msg_to_char(ch, "You cause the room to grow around you.\r\n");
+		act("$n causes the room to grow around you.", FALSE, ch, NULL, NULL, TO_ROOM);
+		
+		change_terrain(IN_ROOM(ch), evo->becomes);
+		if (preserve) {
+			change_base_sector(IN_ROOM(ch), preserve);
+		}
+		
+		remove_depletion(IN_ROOM(ch), DPLTN_PICK);
+		remove_depletion(IN_ROOM(ch), DPLTN_FORAGE);
+	}
+	else {
+		msg_to_char(ch, "There's nothing to grow here (or a random growth chance failed).\r\n");
+	}
 }
 
 
@@ -227,6 +277,7 @@ OLC_MODULE(mapedit_maintain) {
 OLC_MODULE(mapedit_unclaimable) {
 	int hor, ver, radius;
 	bool set = !ROOM_AFF_FLAGGED(IN_ROOM(ch), ROOM_AFF_UNCLAIMABLE);
+	bool any_land = FALSE;
 	room_data *to;
 	
 	if (IS_INSIDE(IN_ROOM(ch)) || IS_ADVENTURE_ROOM(IN_ROOM(ch))) {
@@ -245,7 +296,8 @@ OLC_MODULE(mapedit_unclaimable) {
 		for (ver = -1 * radius; ver <= radius; ++ver) {
 			to = real_shift(IN_ROOM(ch), hor, ver);
 			
-			if (to) {
+			if (to && GET_ISLAND_ID(to) != NO_ISLAND) {
+				any_land = TRUE;
 				if (set) {
 					SET_BIT(ROOM_AFF_FLAGS(to), ROOM_AFF_UNCLAIMABLE);
 					SET_BIT(ROOM_BASE_FLAGS(to), ROOM_AFF_UNCLAIMABLE);
@@ -259,7 +311,10 @@ OLC_MODULE(mapedit_unclaimable) {
 		}
 	}
 	
-	if (radius == 0) {
+	if (!any_land) {
+		msg_to_char(ch, "Only ocean found -- ocean cannot be set unclaimable.\r\n");
+	}
+	else if (radius == 0) {
 		msg_to_char(ch, "You set this tile %s.\r\n", (set ? "unclaimable" : "no longer unclaimable"));
 	}
 	else {
@@ -360,6 +415,7 @@ OLC_MODULE(mapedit_delete_room) {
 				msg_to_char(c, "Room deleted.\r\n");
 			}
 			look_at_room(c);
+			msdp_update_room(c);
 		}
 		
 		delete_room(in_room, TRUE);
@@ -410,7 +466,7 @@ OLC_MODULE(mapedit_ruin) {
 
 OLC_MODULE(mapedit_exits) {
 	void add_room_to_vehicle(room_data *room, vehicle_data *veh);
-	extern room_data *create_room();
+	extern room_data *create_room(room_data *home);
 	extern const char *dirs[];
 	extern room_vnum find_free_vnum();
 	extern const int rev_dir[];
@@ -442,7 +498,7 @@ OLC_MODULE(mapedit_exits) {
 		msg_to_char(ch, "An exit already exists in that direction in the target room.\r\n");
 	else {
 		if (new) {
-			to_room = create_room();
+			to_room = create_room(HOME_ROOM(IN_ROOM(ch)));
 			attach_building_to_room(building_proto(config_get_int("default_interior")), to_room, TRUE);
 			
 			// TODO this is done in several different things that add rooms, and could be moved to a function -paul 7/14/2016
@@ -452,8 +508,6 @@ OLC_MODULE(mapedit_exits) {
 				add_room_to_vehicle(to_room, GET_ROOM_VEHICLE(IN_ROOM(ch)));
 			}
 			COMPLEX_DATA(HOME_ROOM(IN_ROOM(ch)))->inside_rooms++;
-			
-			COMPLEX_DATA(to_room)->home_room = HOME_ROOM(IN_ROOM(ch));
 			
 			if (ROOM_OWNER(HOME_ROOM(IN_ROOM(ch)))) {
 				perform_claim_room(to_room, ROOM_OWNER(HOME_ROOM(IN_ROOM(ch))));
@@ -530,7 +584,7 @@ OLC_MODULE(mapedit_naturalize) {
 		LL_FOREACH(land_map, map) {
 			room = real_real_room(map->vnum);	// may or may not exist
 			
-			if (island && map->island != island_id) {
+			if (island && map->shared->island_id != island_id) {
 				continue;
 			}
 			if (room && ROOM_OWNER(room)) {
@@ -543,7 +597,13 @@ OLC_MODULE(mapedit_naturalize) {
 				continue;
 			}
 			if (map->sector_type == map->natural_sector) {
-				continue;	// already same
+				// already same -- but refresh crop type if applicable
+				if (SECT_FLAGGED(map->sector_type, SECTF_HAS_CROP_DATA)) {
+					if (room || (room = real_room(map->vnum))) {
+						set_crop_type(room, get_potential_crop_for_location(room));
+					}
+				}
+				continue;	// no need to change terrain
 			}
 			
 			// looks good: naturalize it
@@ -555,6 +615,9 @@ OLC_MODULE(mapedit_naturalize) {
 				if (ROOM_OWNER(room)) {
 					deactivate_workforce_room(ROOM_OWNER(room), room);
 				}
+				
+				// no longer need this
+				remove_room_extra_data(room, ROOM_EXTRA_TRENCH_ORIGINAL_SECTOR);
 			}
 			else {
 				perform_change_sect(NULL, map, map->natural_sector);
@@ -567,6 +630,9 @@ OLC_MODULE(mapedit_naturalize) {
 				else {
 					map->crop_type = NULL;
 				}
+		
+				// no longer need this
+				remove_extra_data(&map->shared->extra_data, ROOM_EXTRA_TRENCH_ORIGINAL_SECTOR);
 			}
 			++count;
 		}
@@ -591,7 +657,16 @@ OLC_MODULE(mapedit_naturalize) {
 			deactivate_workforce_room(ROOM_OWNER(IN_ROOM(ch)), IN_ROOM(ch));
 		}
 		
-		syslog(SYS_OLC, GET_INVIS_LEV(ch), TRUE, "OLC: %s has set naturalized the sector at %s", GET_NAME(ch), room_log_identifier(IN_ROOM(ch)));
+		// no longer need this
+		remove_room_extra_data(IN_ROOM(ch), ROOM_EXTRA_TRENCH_ORIGINAL_SECTOR);
+		
+		// reset crop?
+		if (ROOM_SECT_FLAGGED(IN_ROOM(ch), SECTF_HAS_CROP_DATA)) {
+			set_crop_type(IN_ROOM(ch), get_potential_crop_for_location(IN_ROOM(ch)));
+		}
+		
+		// probably no need to log 1-tile naturalizes
+		// syslog(SYS_OLC, GET_INVIS_LEV(ch), TRUE, "OLC: %s has naturalized the sector at %s", GET_NAME(ch), room_log_identifier(IN_ROOM(ch)));
 		msg_to_char(ch, "You have naturalized the sector for this tile.\r\n");
 		act("$n has naturalized the area!", FALSE, ch, NULL, NULL, TO_ROOM);
 		world_map_needs_save = TRUE;
@@ -650,7 +725,7 @@ OLC_MODULE(mapedit_remember) {
 		
 		// check all land tiles
 		LL_FOREACH(land_map, map) {
-			if (map->island != island_id) {
+			if (map->shared->island_id != island_id) {
 				continue;
 			}
 			if (SECT_FLAGGED(map->sector_type, SECTF_MAP_BUILDING | SECTF_INSIDE | SECTF_ADVENTURE)) {
@@ -686,12 +761,30 @@ OLC_MODULE(mapedit_remember) {
 OLC_MODULE(mapedit_roomtype) {
 	extern bld_data *get_building_by_name(char *name, bool room_only);
 	
-	bld_data *id;
+	bld_data *id = NULL;
 
-	if (!IS_INSIDE(IN_ROOM(ch)))
+	if (!IS_INSIDE(IN_ROOM(ch))) {
 		msg_to_char(ch, "You need to be in one of the interior rooms of a building first.\r\n");
-	else if (!*argument || !(id = get_building_by_name(argument, TRUE))) {
+		return;
+	}
+	if (!*argument) {
 		msg_to_char(ch, "What type of room would you like to set (use 'vnum b <name>' to search)?\r\n");
+		return;
+	}
+	
+	// parse arg
+	if (isdigit(*argument) && !(id = building_proto(atoi(argument)))) {
+		msg_to_char(ch, "Invalid building (room) vnum '%s'.\r\n", argument);
+		return;
+	}
+	else if (!id && !(id = get_building_by_name(argument, TRUE))) {
+		msg_to_char(ch, "Invalid building (room) type name '%s'.\r\n", argument);
+		return;
+	}
+	
+	// final handling
+	if (!id || !IS_SET(GET_BLD_FLAGS(id), BLD_ROOM)) {
+		msg_to_char(ch, "Invalid room type. You must specify a building with the ROOM flag.\r\n");
 	}
 	else {
 		dismantle_wtrigger(IN_ROOM(ch), ch, FALSE);

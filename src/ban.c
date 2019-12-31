@@ -121,7 +121,7 @@ ACMD(do_ban) {
 			send_to_char("No sites are banned.\r\n", ch);
 			return;
 		}
-		strcpy(format, "%-25.25s  %-8.8s  %-10.10s  %-16.16s\r\n");
+		strcpy(format, "%-25s  %-8.8s  %-10.10s  %-16.16s\r\n");
 		msg_to_char(ch, format, "Banned Site Name", "Ban Type", "Banned On", "Banned By");
 		msg_to_char(ch, format, "---------------------------------", "---------------------------------", "---------------------------------", "---------------------------------");
 
@@ -169,7 +169,7 @@ ACMD(do_ban) {
 	ban_node->next = ban_list;
 	ban_list = ban_node;
 
-	syslog(SYS_GC, GET_INVIS_LEV(ch), TRUE, "BAN: %s has banned %s for %s players.", GET_NAME(ch), site, ban_types[ban_node->type]);
+	syslog(SYS_GC, GET_INVIS_LEV(ch), TRUE, "BAN: %s has banned %s for %s players", GET_NAME(ch), site, ban_types[ban_node->type]);
 	send_to_char("Site banned.\r\n", ch);
 	write_ban_list();
 }
@@ -199,7 +199,7 @@ ACMD(do_unban) {
 	}
 	REMOVE_FROM_LIST(ban_node, ban_list, next);
 	send_to_char("Site unbanned.\r\n", ch);
-	syslog(SYS_GC, GET_INVIS_LEV(ch), TRUE, "BAN: %s removed the %s-player ban on %s.", GET_NAME(ch), ban_types[ban_node->type], ban_node->site);
+	syslog(SYS_GC, GET_INVIS_LEV(ch), TRUE, "BAN: %s removed the %s-player ban on %s", GET_NAME(ch), ban_types[ban_node->type], ban_node->site);
 
 	free(ban_node);
 	write_ban_list();
@@ -240,7 +240,7 @@ int Valid_Name(char *newname) {
 
 	/* Does the desired name contain a string in the invalid list? */
 	for (i = 0; i < num_invalid; i++) {
-		if (*invalid_list[i] == '%') {	// leading * means substr
+		if (*invalid_list[i] == '%') {	// leading % means substr
 			if (strstr(tempname, invalid_list[i] + 1)) {
 				return (0);
 			}

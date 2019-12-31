@@ -60,6 +60,7 @@ extern const char *dirs[];
 extern struct instance_data *quest_instance_global;
 
 // external funcs
+void adjust_vehicle_tech(vehicle_data *veh, bool add);
 void die(char_data *ch, char_data *killer);
 extern struct instance_data *get_instance_by_mob(char_data *mob);
 extern room_data *get_room(room_data *ref, char *name);
@@ -380,7 +381,7 @@ ACMD(do_mjunk) {
 
 /* prints the message to everyone in the room other than the mob and victim */
 ACMD(do_mechoaround) {
-	char arg[MAX_INPUT_LENGTH];
+	char arg[MAX_INPUT_LENGTH], temp[MAX_INPUT_LENGTH];
 	char_data *victim;
 	char *p;
 
@@ -391,8 +392,9 @@ ACMD(do_mechoaround) {
 
 	if (AFF_FLAGGED(ch, AFF_ORDERED))
 		return;
-
-	p = one_argument(argument, arg);
+	
+	strcpy(temp, argument);	// preserve a copy
+	p = one_argument(temp, arg);
 	skip_spaces(&p);
 
 	if (!*arg) {
@@ -469,7 +471,7 @@ ACMD(do_mechoneither) {
 
 /* sends the message to only the victim */
 ACMD(do_msend) {
-	char arg[MAX_INPUT_LENGTH];
+	char arg[MAX_INPUT_LENGTH], temp[MAX_INPUT_LENGTH];
 	char_data *victim;
 	char *p;
 
@@ -480,8 +482,9 @@ ACMD(do_msend) {
 
 	if (AFF_FLAGGED(ch, AFF_ORDERED))
 		return;
-
-	p = one_argument(argument, arg);
+	
+	strcpy(temp, argument);	// preserve this
+	p = one_argument(temp, arg);
 	skip_spaces(&p);
 
 	if (!*arg) {
@@ -593,7 +596,7 @@ ACMD(do_mregionecho) {
 		mob_log(ch, "mregionecho called with invalid target");
 	}
 	else {
-		center = get_map_location_for(center);
+		center = GET_MAP_LOC(center) ? real_room(GET_MAP_LOC(center)->vnum) : NULL;
 		radius = atoi(radius_arg);
 		if (radius < 0) {
 			radius = -radius;
@@ -605,7 +608,7 @@ ACMD(do_mregionecho) {
 				if (STATE(desc) != CON_PLAYING || !(targ = desc->character)) {
 					continue;
 				}
-				if (RMT_FLAGGED(IN_ROOM(targ), RMT_NO_LOCATION)) {
+				if (NO_LOCATION(IN_ROOM(targ))) {
 					continue;
 				}
 				if (compute_distance(center, IN_ROOM(targ)) > radius) {
@@ -781,6 +784,11 @@ ACMD(do_mload) {
 		
 		tch = (*arg1 == UID_CHAR) ? get_char(arg1) : get_char_room_vis(ch, arg1);
 		if (tch) {	// load on char
+			// mark as "gathered" like a resource
+			if (!IS_NPC(tch) && GET_LOYALTY(tch)) {
+				add_production_total(GET_LOYALTY(tch), GET_OBJ_VNUM(object), 1);
+			}
+			
 			if (*arg2 && (pos = find_eq_pos_script(arg2)) >= 0 && !GET_EQ(tch, pos) && can_wear_on_pos(object, pos)) {
 				equip_char(tch, object, pos);
 				load_otrigger(object);
@@ -828,6 +836,12 @@ ACMD(do_mload) {
 	}
 	else
 		mob_log(ch, "mload: bad type");
+}
+
+
+ACMD(do_mmod) {
+	void script_modify(char *argument);
+	script_modify(argument);
 }
 
 
@@ -1015,14 +1029,17 @@ ACMD(do_mgoto) {
 	char_from_room(ch);
 	char_to_room(ch, location);
 	enter_wtrigger(IN_ROOM(ch), ch, NO_DIR);
+	msdp_update_room(ch);
 }
 
 
 /* lets the mobile do a command at another location. Very useful */
 ACMD(do_mat) {
+	char_data *was_fighting = FIGHTING(ch);
 	char arg[MAX_INPUT_LENGTH];
 	room_data *location = NULL, *original;
 	struct instance_data *inst;
+	int fmode = FIGHT_MODE(ch);
 
 	if (!MOB_OR_IMPL(ch)) {
 		send_config_msg(ch, "huh_string");
@@ -1040,9 +1057,9 @@ ACMD(do_mat) {
 	}
 
 	// special case for use of i### room-template targeting when mob is outside its instance
-	if (arg[0] == 'i' && isdigit(arg[1]) && MOB_INSTANCE_ID(ch) != NOTHING && (inst = real_instance(MOB_INSTANCE_ID(ch))) && inst->start) {
+	if (arg[0] == 'i' && isdigit(arg[1]) && MOB_INSTANCE_ID(ch) != NOTHING && (inst = real_instance(MOB_INSTANCE_ID(ch))) && INST_START(inst)) {
 		// I know that's a lot to check but we want i###-targeting to work when a mob wanders out -pc 4/13/2015
-		location = get_room(inst->start, arg);
+		location = get_room(INST_START(inst), arg);
 	}
 	else {
 		location = get_room(IN_ROOM(ch), arg);
@@ -1066,6 +1083,12 @@ ACMD(do_mat) {
 		char_from_room(ch);
 		char_to_room(ch, original);
 	}
+	
+	if (was_fighting && IN_ROOM(was_fighting) == IN_ROOM(ch) && !IS_DEAD(ch) && !EXTRACTED(ch)) {
+		set_fighting(ch, was_fighting, fmode);
+	}
+	
+	msdp_update_room(ch);	// once we're sure we're staying
 }
 
 
@@ -1221,7 +1244,7 @@ ACMD(do_mrestore) {
 			free_resource_list(GET_BUILDING_RESOURCES(room));
 			GET_BUILDING_RESOURCES(room) = NULL;
 			COMPLEX_DATA(room)->damage = 0;
-			COMPLEX_DATA(room)->burning = 0;
+			COMPLEX_DATA(room)->burn_down_time = 0;
 		}
 	}
 }
@@ -1232,13 +1255,12 @@ ACMD(do_mrestore) {
 * everyone in the current room to the specified location
 */
 ACMD(do_mteleport) {
-	extern struct instance_data *find_instance_by_room(room_data *room, bool check_homeroom);
-	
 	char arg1[MAX_INPUT_LENGTH], arg2[MAX_INPUT_LENGTH];
 	room_data *target;
 	char_data *vict, *next_ch;
 	struct instance_data *inst;
 	vehicle_data *veh;
+	obj_data *obj;
 	int iter;
 
 	if (!MOB_OR_IMPL(ch)) {
@@ -1281,6 +1303,7 @@ ACMD(do_mteleport) {
 				char_to_room(vict, target);
 				enter_wtrigger(IN_ROOM(vict), vict, NO_DIR);
 				qt_visit_room(vict, IN_ROOM(vict));
+				msdp_update_room(vict);
 			}
 		}
 	}
@@ -1291,10 +1314,10 @@ ACMD(do_mteleport) {
 			return;
 		}
 		
-		for (iter = 0; iter < inst->size; ++iter) {
+		for (iter = 0; iter < INST_SIZE(inst); ++iter) {
 			// only if it's not the target room, or we'd be here all day
-			if (inst->room[iter] && inst->room[iter] != target) {
-				for (vict = ROOM_PEOPLE(inst->room[iter]); vict; vict = next_ch) {
+			if (INST_ROOM(inst, iter) && INST_ROOM(inst, iter) != target) {
+				for (vict = ROOM_PEOPLE(INST_ROOM(inst, iter)); vict; vict = next_ch) {
 					next_ch = vict->next_in_room;
 					
 					if (!valid_dg_target(vict, DG_ALLOW_GODS)) {
@@ -1310,6 +1333,7 @@ ACMD(do_mteleport) {
 						}
 						enter_wtrigger(IN_ROOM(vict), ch, NO_DIR);
 						qt_visit_room(vict, IN_ROOM(vict));
+						msdp_update_room(vict);
 					}
 				}
 			}
@@ -1325,12 +1349,18 @@ ACMD(do_mteleport) {
 				char_to_room(vict, target);
 				enter_wtrigger(IN_ROOM(vict), vict, NO_DIR);
 				qt_visit_room(vict, IN_ROOM(vict));
+				msdp_update_room(vict);
 			}
 		}
 		else if ((*arg1 == UID_CHAR && (veh = get_vehicle(arg1))) || (veh = get_vehicle_in_room_vis(ch, arg1))) {
+			adjust_vehicle_tech(veh, FALSE);
 			vehicle_from_room(veh);
 			vehicle_to_room(veh, target);
+			adjust_vehicle_tech(veh, TRUE);
 			entry_vtrigger(veh);
+		}
+		else if ((*arg1 == UID_CHAR && (obj = get_obj(arg1))) || (obj = get_obj_vis(ch, arg1))) {
+			obj_to_room(obj, target);
 		}
 		else {
 			mob_log(ch, "mteleport: victim (%s) does not exist", arg1);
@@ -1452,7 +1482,7 @@ ACMD(do_mterraform) {
 
 
 ACMD(do_mdamage) {
-	char name[MAX_INPUT_LENGTH], modarg[MAX_INPUT_LENGTH], typearg[MAX_INPUT_LENGTH];
+	char name[MAX_INPUT_LENGTH], modarg[MAX_INPUT_LENGTH], typearg[MAX_INPUT_LENGTH], buf[MAX_STRING_LENGTH];
 	double modifier = 1.0;
 	char_data *vict;
 	int type;
@@ -1477,6 +1507,14 @@ ACMD(do_mdamage) {
 	if (*modarg) {
 		modifier = atof(modarg) / 100.0;
 	}
+	
+	// send negatives to %heal% instead
+	if (modifier < 0) {
+		sprintf(buf, "%s health %.2f", name, -atof(modarg));
+		script_heal(ch, MOB_TRIGGER, buf);
+		return;
+	}
+	
 	modifier = scale_modifier_by_mob(ch, modifier);
 
 	if (*name == UID_CHAR) {
@@ -1541,18 +1579,25 @@ ACMD(do_maoe) {
 	modifier = scale_modifier_by_mob(ch, modifier);
 	
 	level = get_approximate_level(ch);
-	for (vict = ROOM_PEOPLE(IN_ROOM(ch)); vict; vict = next_vict) {
-		next_vict = vict->next_in_room;
-		
-		if (ch != vict && is_fight_enemy(ch, vict)) {
-			script_damage(vict, ch, level, type, modifier);
+	LL_FOREACH_SAFE2(ROOM_PEOPLE(IN_ROOM(ch)), vict, next_vict, next_in_room) {
+		if (ch == vict) {
+			continue;
 		}
+		if (FIGHTING(ch) && !is_fight_enemy(ch, vict)) {
+			continue;	// in combat, only hit enemies
+		}
+		if (!FIGHTING(ch) && !IS_NPC(vict)) {
+			continue;	// out of combat, only hit players
+		}
+		
+		script_damage(vict, ch, level, type, modifier);
 	}
 }
 
 
 ACMD(do_mdot) {
 	char name[MAX_INPUT_LENGTH], modarg[MAX_INPUT_LENGTH], durarg[MAX_INPUT_LENGTH], typearg[MAX_INPUT_LENGTH], stackarg[MAX_INPUT_LENGTH];
+	any_vnum atype = ATYPE_DG_AFFECT;
 	double modifier = 1.0;
 	char_data *vict;
 	int type, max_stacks;
@@ -1564,8 +1609,16 @@ ACMD(do_mdot) {
 
 	if (AFF_FLAGGED(ch, AFF_ORDERED))
 		return;
-
+	
 	argument = one_argument(argument, name);
+	// sometimes name is an affect vnum
+	if (*name == '#') {
+		atype = atoi(name+1);
+		argument = one_argument(argument, name);
+		if (!find_generic(atype, GENERIC_AFFECT)) {
+			atype = ATYPE_DG_AFFECT;
+		}
+	}
 	argument = one_argument(argument, modarg);
 	argument = one_argument(argument, durarg);
 	argument = one_argument(argument, typearg);	// optional, default physical
@@ -1604,7 +1657,7 @@ ACMD(do_mdot) {
 	}
 	
 	max_stacks = (*stackarg ? atoi(stackarg) : 1);
-	script_damage_over_time(vict, get_approximate_level(ch), type, modifier, atoi(durarg), max_stacks, ch);
+	script_damage_over_time(vict, atype, get_approximate_level(ch), type, modifier, atoi(durarg), max_stacks, ch);
 }
 
 
@@ -1669,6 +1722,16 @@ ACMD(do_mforce) {
 			command_interpreter(victim, argument);
 	}
 }
+
+
+ACMD(do_mheal) {
+	if (!MOB_OR_IMPL(ch) || AFF_FLAGGED(ch, AFF_ORDERED) || (ch->desc && (GET_ACCESS_LEVEL(ch->desc->original) < LVL_CIMPL))) {
+		send_config_msg(ch, "huh_string");
+		return;
+	}
+	script_heal(ch, MOB_TRIGGER, argument);
+}
+
 
 /* hunt for someone */
 ACMD(do_mhunt) {
@@ -1834,8 +1897,8 @@ ACMD(do_mforget) {
 
 
 ACMD(do_msiege) {
-	void besiege_room(room_data *to_room, int damage);
-	extern bool besiege_vehicle(vehicle_data *veh, int damage, int siege_type);
+	void besiege_room(char_data *attacker, room_data *to_room, int damage, vehicle_data *by_vehicle);
+	extern bool besiege_vehicle(char_data *attacker, vehicle_data *veh, int damage, int siege_type, vehicle_data *by_vehicle);
 	extern bool find_siege_target_for_vehicle(char_data *ch, vehicle_data *veh, char *arg, room_data **room_targ, int *dir, vehicle_data **veh_targ);
 	extern bool validate_siege_target_room(char_data *ch, vehicle_data *veh, room_data *to_room);
 	
@@ -1883,14 +1946,54 @@ ACMD(do_msiege) {
 	
 	if (room_targ) {
 		if (validate_siege_target_room(ch, NULL, room_targ)) {
-			besiege_room(room_targ, dam);
+			besiege_room(NULL, room_targ, dam, NULL);
 		}
 	}
 	else if (veh_targ) {
-		besiege_vehicle(veh_targ, dam, SIEGE_PHYSICAL);
+		besiege_vehicle(NULL, veh_targ, dam, SIEGE_PHYSICAL, NULL);
 	}
 	else {
 		mob_log(ch, "osiege: invalid target");
+	}
+}
+
+
+// kills the target
+ACMD(do_mslay) {
+	char name[MAX_INPUT_LENGTH];
+	char_data *vict;
+
+	if (!MOB_OR_IMPL(ch)) {
+		send_config_msg(ch, "huh_string");
+		return;
+	}
+
+	if (AFF_FLAGGED(ch, AFF_ORDERED))
+		return;
+
+	argument = one_argument(argument, name);
+
+	if (!*name) {
+		mob_log(ch, "mslay: no target");
+		return;
+	}
+	
+	if (*name == UID_CHAR) {
+		if (!(vict = get_char(name))) {
+			mob_log(ch, "mslay: victim (%s) does not exist", name);
+			return;
+		}
+	}
+	else if (!(vict = get_char_room_vis(ch, name))) {
+		mob_log(ch, "mslay: victim (%s) does not exist", name);
+		return;
+	}
+	
+	if (IS_IMMORTAL(vict)) {
+		msg_to_char(vict, "Being the cool immortal you are, you sidestep a trap, obviously placed to kill you.\r\n");
+	}
+	else {
+		die(vict, ch);
 	}
 }
 
@@ -2403,8 +2506,7 @@ ACMD(do_mscale) {
 			scale_item_to_level(obj, level);
 		}
 		else if ((proto = obj_proto(GET_OBJ_VNUM(obj))) && OBJ_FLAGGED(proto, OBJ_SCALABLE)) {
-			fresh = read_object(GET_OBJ_VNUM(obj), TRUE);
-			scale_item_to_level(fresh, level);
+			fresh = fresh_copy_obj(obj, level);
 			swap_obj_for_obj(obj, fresh);
 			extract_obj(obj);
 		}

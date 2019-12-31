@@ -39,8 +39,11 @@
 *   Object Utils
 */
 
-// externs
+// external vars
 extern const struct wear_data_type wear_data[NUM_WEARS];
+
+// external funcs
+void add_obj_to_eq_set(obj_data *obj, int set_id, int pos);
 
 
  //////////////////////////////////////////////////////////////////////////////
@@ -243,6 +246,11 @@ obj_data *Obj_load_from_file(FILE *fl, obj_vnum vnum, int *location, char_data *
 			
 					ex->keyword = fread_string(fl, error);
 					ex->description = fread_string(fl, error);
+				}
+				else if (OBJ_FILE_TAG(line, "Eq-set:", length)) {
+					if (sscanf(line + length + 1, "%d %d", &i_in[0], &i_in[1]) == 2) {
+						add_obj_to_eq_set(obj, i_in[0], i_in[1]);
+					}
 				}
 				break;
 			}
@@ -467,6 +475,7 @@ void Crash_save_one_obj_to_file(FILE *fl, obj_data *obj, int location) {
 	char temp[MAX_STRING_LENGTH];
 	struct extra_descr_data *ex;
 	struct trig_var_data *tvd;
+	struct eq_set_obj *eq_set;
 	struct obj_binding *bind;
 	struct obj_apply *apply;
 	obj_data *proto;
@@ -573,6 +582,11 @@ void Crash_save_one_obj_to_file(FILE *fl, obj_data *obj, int location) {
 		fprintf(fl, "Bound-to: %d\n", bind->idnum);
 	}
 	
+	// any equipment sets it's in
+	LL_FOREACH(GET_OBJ_EQ_SETS(obj), eq_set) {
+		fprintf(fl, "Eq-set: %d %d\n", eq_set->id, eq_set->pos);
+	}
+	
 	// scripts
 	if (SCRIPT(obj)) {
 		trig_data *trig;
@@ -582,7 +596,7 @@ void Crash_save_one_obj_to_file(FILE *fl, obj_data *obj, int location) {
 		}
 		
 		LL_FOREACH (SCRIPT(obj)->global_vars, tvd) {
-			if (*tvd->name == '-') { // don't save if it begins with -
+			if (*tvd->name == '-' || !*tvd->value) { // don't save if it begins with - or is empty
 				continue;
 			}
 			
@@ -602,6 +616,11 @@ void Crash_save_one_obj_to_file(FILE *fl, obj_data *obj, int location) {
 */
 void extract_all_items(char_data *ch) {
 	int iter;
+	
+	// it's no longer safe to save the delay file -- saving it after extracting items results in losing all items
+	if (!IS_NPC(ch)) {
+		DONT_SAVE_DELAY(ch) = TRUE;
+	}
 	
 	for (iter = 0; iter < NUM_WEARS; ++iter) {
 		if (GET_EQ(ch, iter)) {
@@ -662,17 +681,14 @@ void auto_equip(char_data *ch, obj_data *obj, int *location) {
 * @param obj_data *obj The object.
 * @param char_data *ch The person to give/equip it to.
 * @param int location Where it should be equipped.
+* @param obj_data ***cont_row For putting items back in containers (must be at least MAX_BAG_ROWS long).
 */
-void loaded_obj_to_char(obj_data *obj, char_data *ch, int location) {
-	obj_data *obj2, *cont_row[MAX_BAG_ROWS];
+void loaded_obj_to_char(obj_data *obj, char_data *ch, int location, obj_data ***cont_row) {
+	obj_data *obj2;
 	int iter;
 	
 	if (!obj || !ch) {
 		return;
-	}
-	
-	for (iter = 0; iter < MAX_BAG_ROWS; ++iter) {
-		cont_row[iter] = NULL;
 	}
 	
 	auto_equip(ch, obj, &location);
@@ -701,61 +717,61 @@ void loaded_obj_to_char(obj_data *obj, char_data *ch, int location) {
 	 */
 	if (location > 0) {		/* Equipped */
 		for (iter = MAX_BAG_ROWS - 1; iter > 0; --iter) {
-			if (cont_row[iter]) {	/* No container, back to inventory. */
-				for (; cont_row[iter]; cont_row[iter] = obj2) {
-					obj2 = cont_row[iter]->next_content;
-					obj_to_char(cont_row[iter], ch);
+			if ((*cont_row)[iter]) {	/* No container, back to inventory. */
+				for (; (*cont_row)[iter]; (*cont_row)[iter] = obj2) {
+					obj2 = (*cont_row)[iter]->next_content;
+					obj_to_char((*cont_row)[iter], ch);
 				}
-				cont_row[iter] = NULL;
+				(*cont_row)[iter] = NULL;
 			}
 		}
-		if (cont_row[0]) {	/* Content list existing. */
+		if ((*cont_row)[0]) {	/* Content list existing. */
 			if (GET_OBJ_TYPE(obj) == ITEM_CONTAINER || GET_OBJ_TYPE(obj) == ITEM_CART || IS_CORPSE(obj)) {
 				/* Remove object, fill it, equip again. */
 				obj = unequip_char(ch, location - 1);
 				obj->contains = NULL;	/* Should be NULL anyway, but just in case. */
-				for (; cont_row[0]; cont_row[0] = obj2) {
-					obj2 = cont_row[0]->next_content;
-					obj_to_obj(cont_row[0], obj);
+				for (; (*cont_row)[0]; (*cont_row)[0] = obj2) {
+					obj2 = (*cont_row)[0]->next_content;
+					obj_to_obj((*cont_row)[0], obj);
 				}
 				equip_char(ch, obj, location - 1);
 			}
 			else {			/* Object isn't container, empty the list. */
-				for (; cont_row[0]; cont_row[0] = obj2) {
-					obj2 = cont_row[0]->next_content;
-					obj_to_char(cont_row[0], ch);
+				for (; (*cont_row)[0]; (*cont_row)[0] = obj2) {
+					obj2 = (*cont_row)[0]->next_content;
+					obj_to_char((*cont_row)[0], ch);
 				}
-				cont_row[0] = NULL;
+				(*cont_row)[0] = NULL;
 			}
 		}
 	}
 	else {	/* location <= 0 */
 		for (iter = MAX_BAG_ROWS - 1; iter > -location; --iter) {
-			if (cont_row[iter]) {	/* No container, back to inventory. */
-				for (; cont_row[iter]; cont_row[iter] = obj2) {
-					obj2 = cont_row[iter]->next_content;
-					obj_to_char(cont_row[iter], ch);
+			if ((*cont_row)[iter]) {	/* No container, back to inventory. */
+				for (; (*cont_row)[iter]; (*cont_row)[iter] = obj2) {
+					obj2 = (*cont_row)[iter]->next_content;
+					obj_to_char((*cont_row)[iter], ch);
 				}
-				cont_row[iter] = NULL;
+				(*cont_row)[iter] = NULL;
 			}
 		}
-		if (iter == -location && cont_row[iter]) {	/* Content list exists. */
+		if (iter == -location && (*cont_row)[iter]) {	/* Content list exists. */
 			if (GET_OBJ_TYPE(obj) == ITEM_CONTAINER || GET_OBJ_TYPE(obj) == ITEM_CART || IS_CORPSE(obj)) {
 				/* Take the item, fill it, and give it back. */
 				obj_from_char(obj);
 				obj->contains = NULL;
-				for (; cont_row[iter]; cont_row[iter] = obj2) {
-					obj2 = cont_row[iter]->next_content;
-					obj_to_obj(cont_row[iter], obj);
+				for (; (*cont_row)[iter]; (*cont_row)[iter] = obj2) {
+					obj2 = (*cont_row)[iter]->next_content;
+					obj_to_obj((*cont_row)[iter], obj);
 				}
 				obj_to_char(obj, ch);	/* Add to inventory first. */
 			}
 			else {	/* Object isn't container, empty content list. */
-				for (; cont_row[iter]; cont_row[iter] = obj2) {
-					obj2 = cont_row[iter]->next_content;
-					obj_to_char(cont_row[iter], ch);
+				for (; (*cont_row)[iter]; (*cont_row)[iter] = obj2) {
+					obj2 = (*cont_row)[iter]->next_content;
+					obj_to_char((*cont_row)[iter], ch);
 				}
-				cont_row[iter] = NULL;
+				(*cont_row)[iter] = NULL;
 			}
 		}
 		if (location < 0 && location >= -MAX_BAG_ROWS) {
@@ -765,14 +781,14 @@ void loaded_obj_to_char(obj_data *obj, char_data *ch, int location) {
 			 * the character rented.
 			 */
 			obj_from_char(obj);
-			if ((obj2 = cont_row[-location - 1]) != NULL) {
+			if ((obj2 = (*cont_row)[-location - 1]) != NULL) {
 				while (obj2->next_content) {
 					obj2 = obj2->next_content;
 				}
 				obj2->next_content = obj;
 			}
 			else {
-				cont_row[-location - 1] = obj;
+				(*cont_row)[-location - 1] = obj;
 			}
 		}
 	}
@@ -827,6 +843,7 @@ bool objpack_save_room(room_data *room) {
 * @param room_data *room The room.
 */
 void objpack_load_room(room_data *room) {
+	void adjust_vehicle_tech(vehicle_data *veh, bool add);
 	extern vehicle_data *unstore_vehicle_from_file(FILE *fl, any_vnum vnum);
 
 	obj_data *obj, *obj2, *cont_row[MAX_BAG_ROWS];
@@ -948,6 +965,7 @@ void objpack_load_room(room_data *room) {
 			
 			if ((veh = unstore_vehicle_from_file(fl, vnum))) {
 				vehicle_to_room(veh, room);
+				adjust_vehicle_tech(veh, TRUE);
 			}
 		}
 		else if (!strn_cmp(line, "Rent-time:", 10)) {
@@ -996,7 +1014,7 @@ void Crash_listrent(char_data *ch, char *name) {
 	msg_to_char(ch, "%s is using:\r\n", GET_NAME(victim));
 	for (iter = 0; iter < NUM_WEARS; ++iter) {
 		if (GET_EQ(victim, iter)) {
-			msg_to_char(ch, wear_data[iter].eq_prompt);
+			send_to_char(wear_data[iter].eq_prompt, ch);
 			show_obj_to_char(GET_EQ(victim, iter), ch, OBJ_DESC_EQUIPMENT);
 		}
 	}

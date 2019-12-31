@@ -26,6 +26,7 @@
 #include "dg_event.h"
 #include "db.h"
 #include "skills.h"
+#include "vnums.h"
 
 // external funcs
 void combat_meter_damage_dealt(char_data *ch, int amt);
@@ -54,19 +55,18 @@ extern const char *affected_bits[];
 room_data *do_dg_add_room_dir(room_data *from, int dir, bld_data *bld) {
 	void add_room_to_vehicle(room_data *room, vehicle_data *veh);
 	extern struct empire_territory_data *create_territory_entry(empire_data *emp, room_data *room);
-	extern room_data *create_room();
+	extern room_data *create_room(room_data *home);
 	void sort_world_table();
 	
 	room_data *home = HOME_ROOM(from), *new;
 	
 	// create the new room
-	new = create_room();
+	new = create_room(home);
 	create_exit(from, new, dir, TRUE);
 	if (bld) {
 		attach_building_to_room(bld, new, TRUE);
 	}
 
-	COMPLEX_DATA(new)->home_room = home;
 	COMPLEX_DATA(home)->inside_rooms++;
 	
 	if (GET_ROOM_VEHICLE(from)) {
@@ -101,46 +101,69 @@ void do_dg_affect(void *go, struct script_data *sc, trig_data *trig, int script_
 	char junk[MAX_INPUT_LENGTH]; /* will be set to "dg_affect" */
 	char charname[MAX_INPUT_LENGTH], property[MAX_INPUT_LENGTH];
 	char value_p[MAX_INPUT_LENGTH], duration_p[MAX_INPUT_LENGTH];
+	any_vnum atype = ATYPE_DG_AFFECT;
 	bitvector_t i = 0, type = 0;
 	struct affected_type af;
+	bool all_off = FALSE;
 
 	half_chop(cmd, junk, cmd);
 	half_chop(cmd, charname, cmd);
+	// sometimes charname is an affect vnum
+	if (*charname == '#') {
+		atype = atoi(charname+1);
+		half_chop(cmd, charname, cmd);
+		if (!find_generic(atype, GENERIC_AFFECT)) {
+			script_log("Trigger: %s, VNum %d. dg_affect: Missing requested generic affect vnum %d", GET_TRIG_NAME(trig), GET_TRIG_VNUM(trig), atype);
+			atype = ATYPE_DG_AFFECT;
+		}
+	}
+	
 	half_chop(cmd, property, cmd);
 	half_chop(cmd, value_p, duration_p);
 
 	/* make sure all parameters are present */
-	if (!*charname || !*property || !*value_p) {
-		script_log("Trigger: %s, VNum %d. dg_affect usage: <target> <property> <value> <duration>", GET_TRIG_NAME(trig), GET_TRIG_VNUM(trig));
+	if (!*charname || !*property) {
+		script_log("Trigger: %s, VNum %d. dg_affect usage: [#affect vnum] <target> <property> <value> <duration>", GET_TRIG_NAME(trig), GET_TRIG_VNUM(trig));
 		return;
 	}
-	if (str_cmp(value_p, "off") && !*duration_p) {
-		script_log("Trigger: %s, VNum %d. dg_affect missing duration", GET_TRIG_NAME(trig), GET_TRIG_VNUM(trig));
-		return;
+	
+	if (!str_cmp(property, "off")) {
+		all_off = TRUE;
+		// this is good -- no mor args
 	}
-
-	value = atoi(value_p);
-	duration = atoi(duration_p);
-	if (duration == 0 || duration < -1) {
-		script_log("Trigger: %s, VNum %d. dg_affect: need positive duration!", GET_TRIG_NAME(trig), GET_TRIG_VNUM(trig));
-		script_log("Line was: dg_affect %s %s %s %s (%d)", charname, property, value_p, duration_p, duration);
-		return;
-	}
-
-	/* find the property -- first search apply_types */
-	if ((i = search_block(property, apply_types, TRUE)) != NOTHING) {
-		type = APPLY_TYPE;
-	}
-
-	if (!type) { /* search affect_types now */
-		if ((i = search_block(property, affected_bits, TRUE)) != NOTHING) {
-			type = AFFECT_TYPE;
+	else {
+		if (!*value_p) {
+			script_log("Trigger: %s, VNum %d. dg_affect usage: [#affect vnum] <target> <property> <value> <duration>", GET_TRIG_NAME(trig), GET_TRIG_VNUM(trig));
+			return;
 		}
-	}
+		else if (str_cmp(value_p, "off") && !*duration_p) {
+			script_log("Trigger: %s, VNum %d. dg_affect missing duration", GET_TRIG_NAME(trig), GET_TRIG_VNUM(trig));
+			return;
+		}
 
-	if (!type) { /* property not found */
-		script_log("Trigger: %s, VNum %d. dg_affect: unknown property '%s'!", GET_TRIG_NAME(trig), GET_TRIG_VNUM(trig), property);
-		return;
+		value = atoi(value_p);
+		duration = atoi(duration_p);
+		if ((duration == 0 || duration < -1) && str_cmp(value_p, "off")) {
+			script_log("Trigger: %s, VNum %d. dg_affect: need positive duration!", GET_TRIG_NAME(trig), GET_TRIG_VNUM(trig));
+			script_log("Line was: dg_affect %s %s %s %s (%d)", charname, property, value_p, duration_p, duration);
+			return;
+		}
+
+		/* find the property -- first search apply_types */
+		if ((i = search_block(property, apply_types, TRUE)) != NOTHING) {
+			type = APPLY_TYPE;
+		}
+
+		if (!type) { /* search affect_bits now */
+			if ((i = search_block(property, affected_bits, TRUE)) != NOTHING) {
+				type = AFFECT_TYPE;
+			}
+		}
+
+		if (!type) { /* property not found */
+			script_log("Trigger: %s, VNum %d. dg_affect: unknown property '%s'!", GET_TRIG_NAME(trig), GET_TRIG_VNUM(trig), property);
+			return;
+		}
 	}
 
 	/* locate the target */
@@ -154,23 +177,30 @@ void do_dg_affect(void *go, struct script_data *sc, trig_data *trig, int script_
 		return;
 	}
 	
-	if (duration == -1 && !IS_NPC(ch)) {
+	if (duration == -1 && !IS_NPC(ch) && str_cmp(value_p, "off")) {
 		script_log("Trigger: %s, VNum %d. dg_affect: cannot use infinite duration on player target", GET_TRIG_NAME(trig), GET_TRIG_VNUM(trig));
 		return;
 	}
-
+	
+	// are we just removing the whole thing?
+	if (all_off) {
+		affect_from_char(ch, atype, TRUE);
+		return;
+	}
+	
+	// removing one type?
 	if (!str_cmp(value_p, "off")) {
 		if (type == APPLY_TYPE) {
-			affect_from_char_by_apply(ch, ATYPE_DG_AFFECT, i, FALSE);
+			affect_from_char_by_apply(ch, atype, i, TRUE);
 		}
 		else {
-			affect_from_char_by_bitvector(ch, ATYPE_DG_AFFECT, BIT(i), FALSE);
+			affect_from_char_by_bitvector(ch, atype, BIT(i), TRUE);
 		}
 		return;
 	}
 
 	/* add the affect */
-	af.type = ATYPE_DG_AFFECT;
+	af.type = atype;
 	af.cast_by = (script_type == MOB_TRIGGER ? CAST_BY_ID((char_data*)go) : 0);
 	af.duration = (duration == -1 ? UNLIMITED : ceil((double)duration / SECS_PER_REAL_UPDATE));
 	af.modifier = value;
@@ -198,36 +228,60 @@ void do_dg_affect_room(void *go, struct script_data *sc, trig_data *trig, int sc
 	char roomname[MAX_INPUT_LENGTH], property[MAX_INPUT_LENGTH];
 	char value_p[MAX_INPUT_LENGTH], duration_p[MAX_INPUT_LENGTH];
 	bitvector_t i = 0, type = 0;
+	int atype = ATYPE_DG_AFFECT;
 	struct affected_type af;
 	room_data *room = NULL;
+	bool all_off = FALSE;
 	int duration = 0;
 
 	half_chop(cmd, junk, cmd);
 	half_chop(cmd, roomname, cmd);
+	// sometimes roomname is an affect vnum
+	if (*roomname == '#') {
+		atype = atoi(roomname+1);
+		half_chop(cmd, roomname, cmd);
+		if (!find_generic(atype, GENERIC_AFFECT)) {
+			atype = ATYPE_DG_AFFECT;
+		}
+	}
 	half_chop(cmd, property, cmd);
 	half_chop(cmd, value_p, duration_p);
 
 	/* make sure all parameters are present */
-	if (!*roomname || !*property || !*value_p || !*duration_p) {
-		script_log("Trigger: %s, VNum %d. dg_affect_room usage: <room> <property> <on|off> <duration>", GET_TRIG_NAME(trig), GET_TRIG_VNUM(trig));
+	if (!*roomname || !*property) {
+		script_log("Trigger: %s, VNum %d. dg_affect_room usage: [#affect vnum] <room> <property> <on|off> <duration>", GET_TRIG_NAME(trig), GET_TRIG_VNUM(trig));
 		return;
 	}
 	
-	duration = atoi(duration_p);
-	if (duration == 0 || duration < -1) {
-		script_log("Trigger: %s, VNum %d. dg_affect_room: need positive duration!", GET_TRIG_NAME(trig), GET_TRIG_VNUM(trig));
-		script_log("Line was: dg_affect_room %s %s %s %s (%d)", roomname, property, value_p, duration_p, duration);
-		return;
+	if (!str_cmp(property, "off")) {
+		all_off = TRUE;
+		// simple mode
 	}
+	else {	// niot all-off
+		// duration:
+		if (str_cmp(value_p, "off")) {	// not "off"
+			if (!*value_p || !*duration_p) {
+				script_log("Trigger: %s, VNum %d. dg_affect_room usage: [#affect vnum] <room> <property> <on|off> <duration>", GET_TRIG_NAME(trig), GET_TRIG_VNUM(trig));
+				return;
+			}
+	
+			duration = atoi(duration_p);
+			if (duration == 0 || duration < -1) {
+				script_log("Trigger: %s, VNum %d. dg_affect_room: need positive duration!", GET_TRIG_NAME(trig), GET_TRIG_VNUM(trig));
+				script_log("Line was: dg_affect_room %s %s %s %s (%d)", roomname, property, value_p, duration_p, duration);
+				return;
+			}
+		}
 
-	// find the property -- search room_aff_bits
-	if ((i = search_block(property, room_aff_bits, TRUE)) != NOTHING) {
-		type = AFFECT_TYPE;
-	}
+		// find the property -- search room_aff_bits
+		if ((i = search_block(property, room_aff_bits, TRUE)) != NOTHING) {
+			type = AFFECT_TYPE;
+		}
 
-	if (!type) { // property not found
-		script_log("Trigger: %s, VNum %d. dg_affect_room: unknown property '%s'!", GET_TRIG_NAME(trig), GET_TRIG_VNUM(trig), property);
-		return;
+		if (!type) { // property not found
+			script_log("Trigger: %s, VNum %d. dg_affect_room: unknown property '%s'!", GET_TRIG_NAME(trig), GET_TRIG_VNUM(trig), property);
+			return;
+		}
 	}
 
 	/* locate the target */
@@ -241,16 +295,21 @@ void do_dg_affect_room(void *go, struct script_data *sc, trig_data *trig, int sc
 		script_log("Trigger: %s, VNum %d. dg_affect_room: cannot use infinite duration on map tile target", GET_TRIG_NAME(trig), GET_TRIG_VNUM(trig));
 		return;
 	}
+	
+	if (all_off) {	// removing all matching types
+		affect_from_room(room, atype);
+		return;
+	}
 
-	if (!str_cmp(value_p, "off")) {
-		affect_from_room_by_bitvector(room, ATYPE_DG_AFFECT, BIT(i), FALSE);
+	if (!str_cmp(value_p, "off")) {	// remove by bit
+		affect_from_room_by_bitvector(room, atype, BIT(i), FALSE);
 		return;
 	}
 
 	/* add the affect */
-	af.type = ATYPE_DG_AFFECT;
+	af.type = atype;
 	af.cast_by = (script_type == MOB_TRIGGER ? CAST_BY_ID((char_data*)go) : 0);
-	af.duration = (duration == -1 ? UNLIMITED : ceil((double)duration / SECS_PER_MUD_HOUR));
+	af.duration = time(0) + duration;	// duration is actually expire time on room affs (TODO: change the name)
 	af.modifier = 0;
 	af.location = APPLY_NONE;
 	af.bitvector = BIT(i);
@@ -329,8 +388,8 @@ void do_dg_build(room_data *target, char *argument) {
 		disassociate_building(target);
 	
 		construct_building(target, GET_BLD_VNUM(bld));
-		special_building_setup(NULL, target);
 		complete_building(target);
+		special_building_setup(NULL, target);
 	
 		if (dir != NO_DIR) {
 			create_exit(target, SHIFT_DIR(target, dir), dir, FALSE);
@@ -353,8 +412,11 @@ void do_dg_build(room_data *target, char *argument) {
 * @param vehicle_data *veh Optional: A vehicle whose ownership to change.
 */
 void do_dg_own(empire_data *emp, char_data *vict, obj_data *obj, room_data *room, vehicle_data *veh) {
+	void adjust_vehicle_tech(vehicle_data *veh, bool add);
 	void kill_empire_npc(char_data *ch);
 	void setup_generic_npc(char_data *mob, empire_data *emp, int name, int sex);
+	
+	empire_data *owner;
 	
 	if (vict && IS_NPC(vict)) {
 		if (GET_LOYALTY(vict) && emp != GET_LOYALTY(vict) && GET_EMPIRE_NPC_DATA(vict)) {
@@ -368,15 +430,24 @@ void do_dg_own(empire_data *emp, char_data *vict, obj_data *obj, room_data *room
 		obj->last_empire_id = emp ? EMPIRE_VNUM(emp) : NOTHING;
 	}
 	if (veh) {
-		if (VEH_OWNER(veh) && emp != VEH_OWNER(veh) ) {
+		if ((owner = VEH_OWNER(veh)) && emp != owner) {
 			VEH_SHIPPING_ID(veh) = -1;
 			if (VEH_INTERIOR_HOME_ROOM(veh)) {
 				abandon_room(VEH_INTERIOR_HOME_ROOM(veh));
 			}
+			adjust_vehicle_tech(veh, FALSE);
+			
+			qt_empire_players(owner, qt_lose_vehicle, VEH_VNUM(veh));
+			et_lose_vehicle(owner, VEH_VNUM(veh));
 		}
 		VEH_OWNER(veh) = emp;
 		if (emp && VEH_INTERIOR_HOME_ROOM(veh)) {
 			claim_room(VEH_INTERIOR_HOME_ROOM(veh), emp);
+		}
+		if (emp) {
+			adjust_vehicle_tech(veh, TRUE);
+			qt_empire_players(emp, qt_gain_vehicle, VEH_VNUM(veh));
+			et_gain_vehicle(emp, VEH_VNUM(veh));
 		}
 	}
 	if (room) {
@@ -407,7 +478,9 @@ void do_dg_own(empire_data *emp, char_data *vict, obj_data *obj, room_data *room
 void dg_purge_instance(void *owner, struct instance_data *inst, char *argument) {
 	char arg1[MAX_INPUT_LENGTH], arg2[MAX_INPUT_LENGTH];
 	char_data *mob, *next_mob;
+	obj_data *obj, *next_obj;
 	any_vnum vnum;
+	int iter;
 	
 	if (!inst) {
 		return;
@@ -423,7 +496,7 @@ void dg_purge_instance(void *owner, struct instance_data *inst, char *argument) 
 	}
 	else if (is_abbrev(arg1, "mobile")) {
 		LL_FOREACH_SAFE(character_list, mob, next_mob) {
-			if (!IS_NPC(mob) || GET_MOB_VNUM(mob) != vnum || EXTRACTED(mob)) {
+			if (!IS_NPC(mob) || GET_MOB_VNUM(mob) != vnum || EXTRACTED(mob) || MOB_INSTANCE_ID(mob) != INST_ID(inst)) {
 				continue;
 			}
 			
@@ -436,6 +509,29 @@ void dg_purge_instance(void *owner, struct instance_data *inst, char *argument) 
 				dg_owner_purged = 1;
 			}
 			extract_char(mob);
+		}
+	}
+	else if (is_abbrev(arg1, "object")) {
+		for (iter = 0; iter < INST_SIZE(inst); ++iter) {
+			if (!INST_ROOM(inst, iter)) {
+				continue;
+			}
+			
+			LL_FOREACH_SAFE2(ROOM_CONTENTS(INST_ROOM(inst, iter)), obj, next_obj, next_content) {
+				if (GET_OBJ_VNUM(obj) != vnum) {
+					continue;
+				}
+				
+				// found!
+				if (*argument && ROOM_PEOPLE(INST_ROOM(inst, iter))) {
+					act(argument, FALSE, ROOM_PEOPLE(INST_ROOM(inst, iter)), NULL, NULL, TO_CHAR | TO_ROOM);
+				}
+			
+				if (obj == owner) {
+					dg_owner_purged = 1;
+				}
+				extract_obj(obj);
+			}
 		}
 	}
 	else {
@@ -529,6 +625,10 @@ void do_dg_quest(int go_type, void *go, char *argument) {
 			if (!vict) {
 				vict = get_char_near_vehicle(veh, vict_arg);
 			}
+			break;
+		}
+		case EMP_TRIGGER: {
+			script_log_by_type(go_type, go, "dg_quest: empire triggers are not supported");
 			break;
 		}
 		default: {
@@ -625,6 +725,8 @@ void do_dg_terracrop(room_data *target, crop_data *cp) {
 * @param sector_data *sect The sector to change it to.
 */
 void do_dg_terraform(room_data *target, sector_data *sect) {
+	void finish_trench(room_data *room);
+	
 	sector_data *old_sect;
 	
 	if (!target || !sect) {
@@ -654,6 +756,93 @@ void do_dg_terraform(room_data *target, sector_data *sect) {
 		void deactivate_workforce_room(empire_data *emp, room_data *room);
 		deactivate_workforce_room(ROOM_OWNER(target), target);
 	}
+	
+	if (SECT_FLAGGED(sect, SECTF_IS_TRENCH)) {
+		finish_trench(target);
+	}
+}
+
+
+/**
+* Just checks if a trigger is attached to a given SCRIPT(*).
+*
+* @param struct script_data *sc The SCRIPT() from a char/obj/etc.
+* @param any_vnum vnum Which trigger to check for.
+* @return bool TRUE if the trigger is attached, FALSE if not.
+*/
+bool has_trigger(struct script_data *sc, any_vnum vnum) {
+	trig_data *trig;
+	
+	if (!sc) {	// no script data?
+		return FALSE;
+	}
+	LL_FOREACH(TRIGGERS(sc), trig) {
+		if (GET_TRIG_VNUM(trig) == vnum) {
+			return TRUE;	// found any 1 copy of it
+		}
+	}
+	
+	// not found
+	return FALSE;
+}
+
+
+/**
+* For the has_component and charge_component script functions. Both are
+* expected to look like:
+*   %actor.has_component(type, amount, <optional comma-separated flags>)%
+*
+* Examples: %actor.has_component(fibers, 3, plant, hard)%
+*           %actor.charge_component(sapling, 1)%
+*
+* @param char *argument The text inside the (parens).
+* @param int *cmp_type An int pointer to pass back the component type.
+* @param int *number An int pointer to pass back the number requested.
+* @param bitvector_t *cmp_flags A pointer to pass back and component flags.
+* @return bool TRUE if the string parsed correctly; FALSE if this was not a valid string.
+*/
+bool parse_script_component_args(char *argument, int *cmp_type, int *number, bitvector_t *cmp_flags) {
+	extern const char *component_flags[];
+	extern const char *component_types[];
+	
+	char str_arg[256], num_arg[256], arg[256], temp[256];
+	bitvector_t flag;
+	
+	*cmp_type = 0;
+	*number = 0;
+	*cmp_flags = NOBITS;
+	
+	comma_args(argument, str_arg, temp);	// type?
+	strcpy(arg, temp);
+	comma_args(arg, num_arg, temp);	/// number
+	strcpy(arg, temp);
+	
+	// basic args
+	if (!*str_arg || !*num_arg) {
+		return FALSE;	// first 2 args are required
+	}
+	if ((*cmp_type = search_block(str_arg, component_types, FALSE)) == NOTHING) {
+		return FALSE;	// not a valid type
+	}
+	if (!isdigit(*num_arg) || (*number = atoi(num_arg)) < 0) {
+		return FALSE;	// invalid number
+	}
+	
+	// any remaining args? these will be bits
+	while (*arg) {
+		comma_args(arg, str_arg, temp);
+		strcpy(arg, temp);
+		
+		if ((flag = search_block(str_arg, component_flags, FALSE)) != NOTHING) {
+			*cmp_flags |= BIT(flag);
+		}
+		else {
+			return FALSE;	// not a valid component flag
+		}
+	}
+	
+	// if we survived to here, we got a full match (and already set the pointers)
+	return TRUE;
 }
 
 
@@ -782,7 +971,15 @@ void script_damage(char_data *vict, char_data *killer, int level, int dam_type, 
 	}
 	
 	dam = level / 7.0;
+	if (level > 100) {
+		dam *= 1.0 + ((level - 100) / 40.0);
+	}
 	dam *= modifier;
+	
+	// full immunity
+	if (AFF_FLAGGED(vict, AFF_IMMUNE_DAMAGE)) {
+		dam = 0;
+	}
 	
 	// guarantee at least 1
 	if (modifier > 0) {
@@ -829,6 +1026,7 @@ void script_damage(char_data *vict, char_data *killer, int level, int dam_type, 
 * victim.
 *
 * @param char_data *vict The person receiving the DoT.
+* @param any_vnum atype The ATYPE_ const or vnum for the affect.
 * @param int level The level to scale damage to.
 * @param int dam_type A DAM_x type.
 * @param double modifier An amount to modify the damage by (1.0 = full damage).
@@ -836,7 +1034,7 @@ void script_damage(char_data *vict, char_data *killer, int level, int dam_type, 
 * @param int max_stacks Number of times this DoT can stack (minimum/default 1).
 * @param char_data *cast_by The caster, if any, for tracking on the effect (may be NULL).
 */
-void script_damage_over_time(char_data *vict, int level, int dam_type, double modifier, int dur_seconds, int max_stacks, char_data *cast_by) {
+void script_damage_over_time(char_data *vict, any_vnum atype, int level, int dam_type, double modifier, int dur_seconds, int max_stacks, char_data *cast_by) {
 	double dam;
 	
 	if (modifier <= 0 || dur_seconds <= 0) {
@@ -857,5 +1055,415 @@ void script_damage_over_time(char_data *vict, int level, int dam_type, double mo
 	}
 
 	// add the affect
-	apply_dot_effect(vict, ATYPE_DG_AFFECT, ceil((double)dur_seconds / SECS_PER_REAL_UPDATE), dam_type, (int) dam, MAX(1, max_stacks), cast_by);
+	apply_dot_effect(vict, atype, ceil((double)dur_seconds / SECS_PER_REAL_UPDATE), dam_type, (int) dam, MAX(1, max_stacks), cast_by);
+}
+
+
+/**
+* Central processor for %heal% -- this is used to restore scaled health/move/
+* mana, and (optionally) to remove debuffs and dots.
+*
+* Expected parameters in the string: <target> <what to heal> [scale modifier]
+* Example: %self% mana 100
+*
+* @param void *thing The thing calling the script (mob, room, obj, veh)
+* @param int type What type "thing" is (MOB_TRIGGER, etc)
+* @param char *argument The text passed to the command.
+*/
+void script_heal(void *thing, int type, char *argument) {
+	extern char_data *get_char_by_room(room_data *room, char *name);
+	extern char_data *get_char_by_vehicle(vehicle_data *veh, char *name);
+	extern int get_room_scale_level(room_data *room, char_data *targ);
+	extern const double apply_values[];
+	extern const bool aff_is_bad[];
+	
+	char targ_arg[MAX_INPUT_LENGTH], what_arg[MAX_INPUT_LENGTH], *scale_arg, log_root[MAX_STRING_LENGTH];
+	struct affected_type *aff, *next_aff;
+	int pos, amount, level = -1;
+	char_data *victim = NULL;
+	double scale = 100.0;
+	bool done_aff;
+	bitvector_t bitv;
+	
+	// 3 args: target, what, scale
+	scale_arg = any_one_arg(argument, targ_arg);
+	scale_arg = any_one_arg(scale_arg, what_arg);
+	skip_spaces(&scale_arg);
+	if (*targ_arg == UID_CHAR) {
+		victim = get_char(targ_arg);
+	}	// otherwise we'll determine victim later
+	
+	// determine how to log errors
+	switch (type) {
+		case MOB_TRIGGER: {
+			level = get_approximate_level((char_data*)thing);
+			if (!victim) {
+				victim = get_char_room_vis((char_data*)thing, targ_arg);
+			}
+			
+			snprintf(log_root, sizeof(log_root), "Mob (%s, VNum %d)::", GET_SHORT((char_data*)thing), GET_MOB_VNUM((char_data*)thing));
+			break;
+		}
+		case OBJ_TRIGGER: {
+			level = GET_OBJ_CURRENT_SCALE_LEVEL((obj_data*)thing);
+			if (!victim) {
+				victim = get_char_by_obj((obj_data*)thing, targ_arg);
+			}
+			
+			snprintf(log_root, sizeof(log_root), "Obj (%s, VNum %d)::", GET_OBJ_SHORT_DESC((obj_data*)thing), GET_OBJ_VNUM((obj_data*)thing));
+			break;
+		}
+		case VEH_TRIGGER: {
+			level = VEH_SCALE_LEVEL((vehicle_data*)thing);
+			if (!victim) {
+				victim = get_char_by_vehicle((vehicle_data*)thing, targ_arg);
+			}
+			
+			snprintf(log_root, sizeof(log_root), "Veh (%s, VNum %d)::", VEH_SHORT_DESC((vehicle_data*)thing), VEH_VNUM((vehicle_data*)thing));
+			break;
+		}
+		case EMP_TRIGGER: {
+			script_log("%s script_heal: Empire scripts are not supported", log_root);
+			break;
+		}
+		case WLD_TRIGGER:
+		default: {
+			level = get_room_scale_level((room_data*)thing, NULL);
+			if (!victim) {
+				victim = get_char_by_room((room_data*)thing, targ_arg);
+			}
+			
+			snprintf(log_root, sizeof(log_root), "Room %d ::", GET_ROOM_VNUM((room_data*)thing));
+			break;
+		}
+	}
+	
+	if (!*targ_arg || !*what_arg) {
+		script_log("%s script_heal: Invalid arguments: %s", log_root, argument);
+		return;
+	}
+	if (level < 0) {
+		script_log("%s script_heal: Unable to detect level", log_root);
+		return;
+	}
+	if (!victim) {
+		script_log("%s script_heal: Unable to find target: %s", log_root, targ_arg);
+		return;
+	}
+	if (IS_DEAD(victim)) {
+		return;	// fail silently on dead people
+	}
+	
+	// process scale arg (optional)
+	if (*scale_arg && (scale = atof(scale_arg)) < 1) {
+		script_log("%s script_heal: Invalid scale argument: %s", log_root, scale_arg);
+		return;
+	}
+	scale /= 100.0;	// convert to percent
+	
+	// now the real work
+	if (is_abbrev(what_arg, "health") || is_abbrev(what_arg, "hitpoints")) {
+		amount = (394 * level / 55.0 - 5580 / 11.0) * scale;
+		amount = MAX(30, amount);
+		GET_HEALTH(victim) = MIN(GET_MAX_HEALTH(victim), GET_HEALTH(victim) + amount);
+		
+		if (GET_POS(victim) < POS_SLEEPING) {
+			GET_POS(victim) = POS_STANDING;
+		}
+	}
+	else if (is_abbrev(what_arg, "mana")) {
+		amount = (292 * level / 55.0 - 3940 / 11.0) * scale;
+		amount = MAX(40, amount);
+		GET_MANA(victim) = MIN(GET_MAX_MANA(victim), GET_MANA(victim) + amount);
+	}
+	else if (is_abbrev(what_arg, "moves")) {
+		amount = (37 * level / 11.0 - 1950 / 11.0) * scale;
+		amount = MAX(75, amount);
+		GET_MOVE(victim) = MIN(GET_MAX_MOVE(victim), GET_MOVE(victim) + amount);
+	}
+	else if (is_abbrev(what_arg, "dots")) {
+		while (victim->over_time_effects) {
+			dot_remove(victim, victim->over_time_effects);
+		}
+	}
+	else if (is_abbrev(what_arg, "debuffs")) {
+	
+		LL_FOREACH_SAFE(victim->affected, aff, next_aff) {
+			// can't cleanse penalties (things cast by self)
+			if (aff->cast_by == CAST_BY_ID(victim)) {
+				continue;
+			}
+			
+			done_aff = FALSE;
+			if (aff->location != APPLY_NONE && (apply_values[(int) aff->location] == 0.0 || aff->modifier < 0)) {
+				affect_remove(victim, aff);
+				done_aff = TRUE;
+			}
+			if (!done_aff && (bitv = aff->bitvector) != NOBITS) {
+				// check each bit
+				for (pos = 0; bitv && !done_aff; ++pos, bitv >>= 1) {
+					if (IS_SET(bitv, BIT(0)) && aff_is_bad[pos]) {
+						affect_remove(victim, aff);
+						done_aff = TRUE;
+					}
+				}
+			}
+		}
+	}
+	else {
+		script_log("%s script_heal: Invalid thing to heal: %s", log_root, what_arg);
+	}
+}
+
+
+/**
+* %mod% <variable> <field> <value>
+*
+* This function allows scripts to modify a mob/object/room/vehicle.
+*
+* @param char *argument Expected to be: <variable> <field> <value>
+*/
+void script_modify(char *argument) {
+	void format_text(char **ptr_string, int mode, descriptor_data *d, unsigned int maxlen);
+	extern char *get_room_description(room_data *room);
+	extern vehicle_data *get_vehicle(char *name);
+	extern bool world_map_needs_save;
+	
+	char targ_arg[MAX_INPUT_LENGTH], field_arg[MAX_INPUT_LENGTH], value[MAX_INPUT_LENGTH], temp[MAX_STRING_LENGTH];
+	vehicle_data *veh = NULL, *v_proto;
+	char_data *mob = NULL, *m_proto;
+	obj_data *obj = NULL, *o_proto;
+	room_data *room = NULL;
+	bool clear;
+	
+	half_chop(argument, targ_arg, temp);
+	half_chop(temp, field_arg, value);
+	
+	if (!*targ_arg || !*field_arg || !*value) {
+		script_log("%%mod%% called without %s arguments", (!*targ_arg ? "any" : (!*field_arg ? "field and value" : "value")));
+		return;
+	}
+	if (*targ_arg != UID_CHAR) {
+		script_log("%%mod%% requires a variable for the target, got '%s' instead", targ_arg);
+		return;
+	}
+	
+	// this indicates we're clearing a field and setting it back to the prototype
+	clear = !str_cmp(value, "-") || !str_cmp(value, "--");
+	
+	// CHARACTER MODE
+	if ((mob = get_char(targ_arg))) {
+		m_proto = IS_NPC(mob) ? mob_proto(GET_MOB_VNUM(mob)) : NULL;
+		mob->customized = TRUE;	// triggers string saving
+		
+		if (!IS_NPC(mob)) {
+			script_log("%%mod%% cannot target a player");
+		}
+		else if (is_abbrev(field_arg, "keywords")) {
+			if (GET_PC_NAME(mob) && (!m_proto || GET_PC_NAME(mob) != GET_PC_NAME(m_proto))) {
+				free(GET_PC_NAME(mob));
+			}
+			GET_PC_NAME(mob) = clear ? (m_proto ? GET_PC_NAME(m_proto) : str_dup("ERROR")) : str_dup(value);
+		}
+		else if (is_abbrev(field_arg, "longdescription")) {
+			if (GET_LONG_DESC(mob) && (!m_proto || GET_LONG_DESC(mob) != GET_LONG_DESC(m_proto))) {
+				free(GET_LONG_DESC(mob));
+			}
+			strcat(value, "\r\n");	// required by long descs
+			GET_LONG_DESC(mob) = clear ? (m_proto ? GET_LONG_DESC(m_proto) : str_dup("ERROR")) : str_dup(value);
+		}
+		else if (is_abbrev(field_arg, "shortdescription")) {
+			if (GET_SHORT_DESC(mob) && (!m_proto || GET_SHORT_DESC(mob) != GET_SHORT_DESC(m_proto))) {
+				free(GET_SHORT_DESC(mob));
+			}
+			GET_SHORT_DESC(mob) = clear ? (m_proto ? GET_SHORT_DESC(m_proto) : str_dup("ERROR")) : str_dup(value);
+		}
+		else {
+			script_log("%%mod%% called with invalid mob field '%s'", field_arg);
+		}
+	}
+	// OBJECT MODE
+	else if ((obj = get_obj(targ_arg))) {
+		o_proto = obj_proto(GET_OBJ_VNUM(obj));
+		
+		if (is_abbrev(field_arg, "keywords")) {
+			if (GET_OBJ_KEYWORDS(obj) && (!o_proto || GET_OBJ_KEYWORDS(obj) != GET_OBJ_KEYWORDS(o_proto))) {
+				free(GET_OBJ_KEYWORDS(obj));
+			}
+			GET_OBJ_KEYWORDS(obj) = clear ? (o_proto ? GET_OBJ_KEYWORDS(o_proto) : str_dup("ERROR")) : str_dup(value);
+		}
+		else if (is_abbrev(field_arg, "longdescription")) {
+			if (GET_OBJ_LONG_DESC(obj) && (!o_proto || GET_OBJ_LONG_DESC(obj) != GET_OBJ_LONG_DESC(o_proto))) {
+				free(GET_OBJ_LONG_DESC(obj));
+			}
+			GET_OBJ_LONG_DESC(obj) = clear ? (o_proto ? GET_OBJ_LONG_DESC(o_proto) : str_dup("ERROR")) : str_dup(value);
+		}
+		else if (is_abbrev(field_arg, "lookdescription")) {	// SETS the lookdescription
+			if (GET_OBJ_ACTION_DESC(obj) && (!o_proto || GET_OBJ_ACTION_DESC(obj) != GET_OBJ_ACTION_DESC(o_proto))) {
+				free(GET_OBJ_ACTION_DESC(obj));
+			}
+			strcat(value, "\r\n");
+			GET_OBJ_ACTION_DESC(obj) = clear ? (o_proto ? GET_OBJ_ACTION_DESC(o_proto) : str_dup("")) : str_dup(value);
+			if (GET_OBJ_ACTION_DESC(obj) && (!o_proto || GET_OBJ_ACTION_DESC(obj) != GET_OBJ_ACTION_DESC(o_proto))) {
+				format_text(&GET_OBJ_ACTION_DESC(obj), (strlen(GET_OBJ_ACTION_DESC(obj)) > 80 ? FORMAT_INDENT : 0), NULL, MAX_STRING_LENGTH);
+			}
+		}
+		else if (is_abbrev(field_arg, "append-lookdescription")) {	// ADDS TO THE END OF the lookdescription
+			if (strlen(NULLSAFE(GET_OBJ_ACTION_DESC(obj))) + strlen(value) + 2 > MAX_ITEM_DESCRIPTION) {
+				script_log("%%mod%% append-description: obj lookdescription length is too long (%d max)", MAX_ITEM_DESCRIPTION);
+			}
+			else {
+				snprintf(temp, sizeof(temp), "%s%s\r\n", NULLSAFE(GET_OBJ_ACTION_DESC(obj)), value);
+				if (GET_OBJ_ACTION_DESC(obj) && (!o_proto || GET_OBJ_ACTION_DESC(obj) != GET_OBJ_ACTION_DESC(o_proto))) {
+					free(GET_OBJ_ACTION_DESC(obj));
+				}
+				GET_OBJ_ACTION_DESC(obj) = str_dup(temp);
+				if (GET_OBJ_ACTION_DESC(obj) && (!o_proto || GET_OBJ_ACTION_DESC(obj) != GET_OBJ_ACTION_DESC(o_proto))) {
+					format_text(&GET_OBJ_ACTION_DESC(obj), (strlen(GET_OBJ_ACTION_DESC(obj)) > 80 ? FORMAT_INDENT : 0), NULL, MAX_STRING_LENGTH);
+				}
+			}
+		}
+		else if (is_abbrev(field_arg, "append-lookdesc-noformat")) {	// ADDS TO THE END OF the lookdescription without formatting
+			if (strlen(NULLSAFE(GET_OBJ_ACTION_DESC(obj))) + strlen(value) + 2 > MAX_ITEM_DESCRIPTION) {
+				script_log("%%mod%% append-description: obj lookdescription length is too long (%d max)", MAX_ITEM_DESCRIPTION);
+			}
+			else {
+				snprintf(temp, sizeof(temp), "%s%s\r\n", NULLSAFE(GET_OBJ_ACTION_DESC(obj)), value);
+				if (GET_OBJ_ACTION_DESC(obj) && (!o_proto || GET_OBJ_ACTION_DESC(obj) != GET_OBJ_ACTION_DESC(o_proto))) {
+					free(GET_OBJ_ACTION_DESC(obj));
+				}
+				GET_OBJ_ACTION_DESC(obj) = str_dup(temp);
+			}
+		}
+		else if (is_abbrev(field_arg, "shortdescription")) {
+			if (GET_OBJ_SHORT_DESC(obj) && (!o_proto || GET_OBJ_SHORT_DESC(obj) != GET_OBJ_SHORT_DESC(o_proto))) {
+				free(GET_OBJ_SHORT_DESC(obj));
+			}
+			GET_OBJ_SHORT_DESC(obj) = clear ? (o_proto ? GET_OBJ_SHORT_DESC(o_proto) : str_dup("ERROR")) : str_dup(value);
+		}
+		else {
+			script_log("%%mod%% called with invalid obj field '%s'", field_arg);
+		}
+	}
+	// ROOM MODE
+	else if ((room = get_room(NULL, targ_arg))) {
+		if (GET_ROOM_VNUM(room) < MAP_SIZE) {
+			world_map_needs_save = TRUE;
+		}
+		
+		if (SHARED_DATA(room) == &ocean_shared_data) {
+			script_log("%%mod%% cannot be used on Ocean rooms");
+		}
+		else if (is_abbrev(field_arg, "name") || is_abbrev(field_arg, "title")) {
+			if (ROOM_CUSTOM_NAME(room)) {
+				free(ROOM_CUSTOM_NAME(room));
+			}
+			ROOM_CUSTOM_NAME(room) = clear ? NULL : str_dup(value);
+		}
+		else if (is_abbrev(field_arg, "description")) {	// SETS the description
+			if (ROOM_CUSTOM_DESCRIPTION(room)) {
+				free(ROOM_CUSTOM_DESCRIPTION(room));
+			}
+			strcat(value, "\r\n");
+			ROOM_CUSTOM_DESCRIPTION(room) = clear ? NULL : str_dup(value);
+			if (ROOM_CUSTOM_DESCRIPTION(room)) {
+				format_text(&ROOM_CUSTOM_DESCRIPTION(room), (strlen(ROOM_CUSTOM_DESCRIPTION(room)) > 80 ? FORMAT_INDENT : 0), NULL, MAX_STRING_LENGTH);
+			}
+		}
+		else if (is_abbrev(field_arg, "append-description")) {	// ADDS TO THE END OF the description
+			if (strlen(NULLSAFE(ROOM_CUSTOM_DESCRIPTION(room))) + strlen(value) + 2 > MAX_ROOM_DESCRIPTION) {
+				script_log("%%mod%% append-description: description length is too long (%d max)", MAX_ROOM_DESCRIPTION);
+			}
+			else {
+				snprintf(temp, sizeof(temp), "%s%s\r\n", ROOM_CUSTOM_DESCRIPTION(room) ? ROOM_CUSTOM_DESCRIPTION(room) : get_room_description(room), value);
+				if (ROOM_CUSTOM_DESCRIPTION(room)) {
+					free(ROOM_CUSTOM_DESCRIPTION(room));
+				}
+				ROOM_CUSTOM_DESCRIPTION(room) = str_dup(temp);
+				format_text(&ROOM_CUSTOM_DESCRIPTION(room), (strlen(ROOM_CUSTOM_DESCRIPTION(room)) > 80 ? FORMAT_INDENT : 0), NULL, MAX_STRING_LENGTH);
+			}
+		}
+		else if (is_abbrev(field_arg, "append-desc-noformat")) {	// ADDS TO THE END OF the description
+			if (strlen(NULLSAFE(ROOM_CUSTOM_DESCRIPTION(room))) + strlen(value) + 2 > MAX_ROOM_DESCRIPTION) {
+				script_log("%%mod%% append-description: description length is too long (%d max)", MAX_ROOM_DESCRIPTION);
+			}
+			else {
+				snprintf(temp, sizeof(temp), "%s%s\r\n", ROOM_CUSTOM_DESCRIPTION(room) ? ROOM_CUSTOM_DESCRIPTION(room) : get_room_description(room), value);
+				if (ROOM_CUSTOM_DESCRIPTION(room)) {
+					free(ROOM_CUSTOM_DESCRIPTION(room));
+				}
+				ROOM_CUSTOM_DESCRIPTION(room) = str_dup(temp);
+			}
+		}
+		else {
+			script_log("%%mod%% called with invalid room field '%s'", field_arg);
+		}
+	}
+	// VEHICLE MODE
+	else if ((veh = get_vehicle(targ_arg))) {
+		v_proto = vehicle_proto(VEH_VNUM(veh));
+		
+		if (is_abbrev(field_arg, "keywords")) {
+			if (VEH_KEYWORDS(veh) && (!v_proto || VEH_KEYWORDS(veh) != VEH_KEYWORDS(v_proto))) {
+				free(VEH_KEYWORDS(veh));
+			}
+			VEH_KEYWORDS(veh) = clear ? (v_proto ? VEH_KEYWORDS(v_proto) : str_dup("ERROR")) : str_dup(value);
+		}
+		else if (is_abbrev(field_arg, "longdescription")) {
+			if (VEH_LONG_DESC(veh) && (!v_proto || VEH_LONG_DESC(veh) != VEH_LONG_DESC(v_proto))) {
+				free(VEH_LONG_DESC(veh));
+			}
+			VEH_LONG_DESC(veh) = clear ? (v_proto ? VEH_LONG_DESC(v_proto) : str_dup("ERROR")) : str_dup(value);
+		}
+		else if (is_abbrev(field_arg, "lookdescription")) {	// SETS the lookdescription
+			if (VEH_LOOK_DESC(veh) && (!v_proto || VEH_LOOK_DESC(veh) != VEH_LOOK_DESC(v_proto))) {
+				free(VEH_LOOK_DESC(veh));
+			}
+			strcat(value, "\r\n");
+			VEH_LOOK_DESC(veh) = clear ? (v_proto ? VEH_LOOK_DESC(v_proto) : str_dup("")) : str_dup(value);
+			if (VEH_LOOK_DESC(veh) && (!v_proto || VEH_LOOK_DESC(veh) != VEH_LOOK_DESC(v_proto))) {
+				format_text(&VEH_LOOK_DESC(veh), (strlen(VEH_LOOK_DESC(veh)) > 80 ? FORMAT_INDENT : 0), NULL, MAX_STRING_LENGTH);
+			}
+		}
+		else if (is_abbrev(field_arg, "append-lookdescription")) {	// ADDS TO THE END OF the lookdescription
+			if (strlen(NULLSAFE(VEH_LOOK_DESC(veh))) + strlen(value) + 2 > MAX_ITEM_DESCRIPTION) {
+				script_log("%%mod%% append-description: vehicle lookdescription length is too long (%d max)", MAX_ITEM_DESCRIPTION);
+			}
+			else {
+				snprintf(temp, sizeof(temp), "%s%s\r\n", NULLSAFE(VEH_LOOK_DESC(veh)), value);
+				if (VEH_LOOK_DESC(veh) && (!v_proto || VEH_LOOK_DESC(veh) != VEH_LOOK_DESC(v_proto))) {
+					free(VEH_LOOK_DESC(veh));
+				}
+				VEH_LOOK_DESC(veh) = str_dup(temp);
+				if (VEH_LOOK_DESC(veh) && (!v_proto || VEH_LOOK_DESC(veh) != VEH_LOOK_DESC(v_proto))) {
+					format_text(&VEH_LOOK_DESC(veh), (strlen(VEH_LOOK_DESC(veh)) > 80 ? FORMAT_INDENT : 0), NULL, MAX_STRING_LENGTH);
+				}
+			}
+		}
+		else if (is_abbrev(field_arg, "append-lookdesc-noformat")) {	// ADDS TO THE END OF the lookdescription
+			if (strlen(NULLSAFE(VEH_LOOK_DESC(veh))) + strlen(value) + 2 > MAX_ITEM_DESCRIPTION) {
+				script_log("%%mod%% append-description: vehicle lookdescription length is too long (%d max)", MAX_ITEM_DESCRIPTION);
+			}
+			else {
+				snprintf(temp, sizeof(temp), "%s%s\r\n", NULLSAFE(VEH_LOOK_DESC(veh)), value);
+				if (VEH_LOOK_DESC(veh) && (!v_proto || VEH_LOOK_DESC(veh) != VEH_LOOK_DESC(v_proto))) {
+					free(VEH_LOOK_DESC(veh));
+				}
+				VEH_LOOK_DESC(veh) = str_dup(temp);
+			}
+		}
+		else if (is_abbrev(field_arg, "shortdescription")) {
+			if (VEH_SHORT_DESC(veh) && (!v_proto || VEH_SHORT_DESC(veh) != VEH_SHORT_DESC(v_proto))) {
+				free(VEH_SHORT_DESC(veh));
+			}
+			VEH_SHORT_DESC(veh) = clear ? (v_proto ? VEH_SHORT_DESC(v_proto) : str_dup("ERROR")) : str_dup(value);
+		}
+		else {
+			script_log("%%mod%% called with invalid vehicle field '%s'", field_arg);
+		}
+	}
+	else {	// no target?
+		script_log("%%mod%% called with invalid target");
+		return;
+	}
 }

@@ -323,6 +323,11 @@ INTERACTION_FUNC(devastate_crop) {
 	sprintf(buf, "$n's powerful ritual devastates the %s crops!", GET_CROP_NAME(cp));
 	act(buf, FALSE, ch, NULL, NULL, TO_ROOM);
 	
+	// mark gained
+	if (GET_LOYALTY(ch)) {
+		add_production_total(GET_LOYALTY(ch), interaction->vnum, num);
+	}
+	
 	while (num-- > 0) {
 		obj_to_char_or_room((newobj = read_object(interaction->vnum, TRUE)), ch);
 		scale_item_to_level(newobj, 1);	// minimum level
@@ -339,7 +344,7 @@ INTERACTION_FUNC(devastate_trees) {
 	obj_data *newobj;
 	int num;
 	
-	snprintf(type, sizeof(type), GET_SECT_NAME(SECT(inter_room)));
+	snprintf(type, sizeof(type), "%s", GET_SECT_NAME(SECT(inter_room)));
 	strtolower(type);
 	
 	if (interaction->quantity != 1) {
@@ -357,6 +362,11 @@ INTERACTION_FUNC(devastate_trees) {
 		obj_to_char_or_room((newobj = read_object(interaction->vnum, TRUE)), ch);
 		scale_item_to_level(newobj, 1);	// minimum level
 		load_otrigger(newobj);
+	}
+	
+	// mark gained
+	if (GET_LOYALTY(ch)) {
+		add_production_total(GET_LOYALTY(ch), interaction->vnum, interaction->quantity);
 	}
 	
 	return TRUE;
@@ -457,16 +467,16 @@ void start_ritual(char_data *ch, int ritual) {
 * @param char *argument The typed arg.
 */
 void summon_materials(char_data *ch, char *argument) {
-	void sort_storage(empire_data *emp);
 	void read_vault(empire_data *emp);
 
 	char arg1[MAX_INPUT_LENGTH], arg2[MAX_INPUT_LENGTH], *objname;
 	struct empire_storage_data *store, *next_store;
-	int count = 0, total = 1, number, pos;
+	int count = 0, total = 1, number, pos, carry;
+	struct empire_island *isle;
 	empire_data *emp;
 	int cost = 2;	// * number of things to summon
 	obj_data *proto;
-	bool found = FALSE;
+	bool one, found = FALSE;
 
 	half_chop(argument, arg1, arg2);
 	
@@ -479,7 +489,7 @@ void summon_materials(char_data *ch, char *argument) {
 		return;
 	}
 	
-	if (GET_ISLAND_ID(IN_ROOM(ch)) == NO_ISLAND) {
+	if (!GET_ISLAND(IN_ROOM(ch)) || !(isle = get_empire_island(emp, GET_ISLAND_ID(IN_ROOM(ch))))) {
 		msg_to_char(ch, "You can't summon materials here.\r\n");
 		return;
 	}
@@ -518,20 +528,14 @@ void summon_materials(char_data *ch, char *argument) {
 	
 	msg_to_char(ch, "You open a tiny portal to summon materials...\r\n");
 	act("$n opens a tiny portal to summon materials...", FALSE, ch, NULL, NULL, TO_ROOM);
-	
-	// sort first
-	sort_storage(emp);
 
 	pos = 0;
-	for (store = EMPIRE_STORAGE(emp); !found && store; store = next_store) {
-		next_store = store->next;
-		
-		// island check
-		if (store->island != GET_ISLAND_ID(IN_ROOM(ch))) {
-			continue;
+	HASH_ITER(hh, isle->store, store, next_store) {
+		if (found) {
+			break;
 		}
 		
-		proto = obj_proto(store->vnum);
+		proto = store->proto;
 		if (proto && multi_isname(objname, GET_OBJ_KEYWORDS(proto)) && (++pos == number)) {
 			found = TRUE;
 			
@@ -541,23 +545,35 @@ void summon_materials(char_data *ch, char *argument) {
 			}
 			
 			while (count < total && store->amount > 0) {
-				if (retrieve_resource(ch, emp, store, FALSE)) {
-					++count;
+				carry = IS_CARRYING_N(ch);
+				one = retrieve_resource(ch, emp, store, FALSE);
+				if (IS_CARRYING_N(ch) > carry) {
+					++count;	// got one
 				}
-				else {
-					break;	// no more
+				if (!one) {
+					break;	// done with this loop
 				}
 			}
 		}
 	}
 	
 	if (found && count < total && count > 0) {
-		msg_to_char(ch, "There weren't enough, but you managed to summon %d.\r\n", count);
+		if (IS_CARRYING_N(ch) >= CAN_CARRY_N(ch)) {
+			msg_to_char(ch, "You managed to summon %d.\r\n", count);
+		}
+		else {
+			msg_to_char(ch, "There weren't enough, but you managed to summon %d.\r\n", count);
+		}
 	}
 	
 	// result messages
 	if (!found) {
-		msg_to_char(ch, "Nothing like that is stored around here.\r\n");
+		if (IS_CARRYING_N(ch) >= CAN_CARRY_N(ch)) {
+			msg_to_char(ch, "Your arms are full.\r\n");
+		}
+		else {
+			msg_to_char(ch, "Nothing like that is stored around here.\r\n");
+		}
 	}
 	else if (count == 0) {
 		// they must have gotten an error message
@@ -566,7 +582,6 @@ void summon_materials(char_data *ch, char *argument) {
 		// save the empire
 		if (found) {
 			GET_MANA(ch) -= cost * count;	// charge only the amount retrieved
-			EMPIRE_NEEDS_SAVE(emp) = TRUE;
 			read_vault(emp);
 			gain_ability_exp(ch, ABIL_SUMMON_MATERIALS, 1);
 		}
@@ -586,8 +601,12 @@ ACMD(do_collapse) {
 	int cost = 15;
 	
 	one_argument(argument, arg);
-
-	if (!can_use_ability(ch, ABIL_PORTAL_MASTER, MANA, cost, NOTHING)) {
+	
+	if (!has_player_tech(ch, PTECH_PORTAL_UPGRADE)) {
+		msg_to_char(ch, "You don't have the correct ability to collapse portals.\r\n");
+		return;
+	}
+	if (!can_use_ability(ch, NO_ABIL, MANA, cost, NOTHING)) {
 		return;
 	}
 	
@@ -633,7 +652,7 @@ ACMD(do_collapse) {
 		extract_obj(reverse);
 	}
 	
-	gain_ability_exp(ch, ABIL_PORTAL_MASTER, 20);
+	gain_player_tech_exp(ch, PTECH_PORTAL_UPGRADE, 20);
 }
 
 
@@ -723,7 +742,7 @@ ACMD(do_disenchant) {
 		msg_to_char(ch, "Disenchant what?\r\n");
 	}
 	else if (!(obj = get_obj_in_list_vis(ch, arg, ch->carrying))) {
-		msg_to_char(ch, "You seem to have lost your %s.\r\n", arg);
+		msg_to_char(ch, "You don't seem to have a %s.\r\n", arg);
 	}
 	else if (ABILITY_TRIGGERS(ch, NULL, obj, ABIL_DISENCHANT)) {
 		return;
@@ -736,7 +755,7 @@ ACMD(do_disenchant) {
 	}
 	else {
 		charge_ability_cost(ch, MANA, cost, NOTHING, 0, WAIT_SPELL);
-		REMOVE_BIT(GET_OBJ_EXTRA(obj), OBJ_ENCHANTED | OBJ_SUPERIOR);
+		REMOVE_BIT(GET_OBJ_EXTRA(obj), OBJ_ENCHANTED);
 		
 		for (apply = GET_OBJ_APPLIES(obj); apply; apply = next_apply) {
 			next_apply = apply->next;
@@ -893,7 +912,7 @@ ACMD(do_enervate) {
 		// succeed
 	
 		act("$N starts to glow red as you shout the enervate hex at $M! You feel your own stamina grow as you drain $S.", FALSE, ch, NULL, vict, TO_CHAR);
-		act("$n shouts somthing at you... The world takes on a reddish hue and you feel your stamina drain.", FALSE, ch, NULL, vict, TO_VICT);
+		act("$n shouts something at you... The world takes on a reddish hue and you feel your stamina drain.", FALSE, ch, NULL, vict, TO_VICT);
 		act("$n shouts some kind of hex at $N, who starts to glow red and seems weakened!", FALSE, ch, NULL, vict, TO_NOTVICT);
 	
 		af = create_mod_aff(ATYPE_ENERVATE, 1 MUD_HOURS, APPLY_MOVE_REGEN, -1 * GET_INTELLIGENCE(ch) / 2, ch);
@@ -906,51 +925,6 @@ ACMD(do_enervate) {
 	
 	if (can_gain_exp_from(ch, vict)) {
 		gain_ability_exp(ch, ABIL_ENERVATE, 15);
-	}
-}
-
-
-ACMD(do_foresight) {
-	struct affected_type *af;
-	char_data *vict = ch;
-	int amt, cost = 30;
-	
-	int levels[] = { 5, 10, 15 };
-	
-	one_argument(argument, arg);
-	
-	if (!can_use_ability(ch, ABIL_FORESIGHT, MANA, cost, NOTHING)) {
-		return;
-	}
-	else if (*arg && !(vict = get_char_vis(ch, arg, FIND_CHAR_ROOM))) {
-		send_config_msg(ch, "no_person");
-	}
-	else if (ABILITY_TRIGGERS(ch, vict, NULL, ABIL_FORESIGHT)) {
-		return;
-	}
-	else {
-		charge_ability_cost(ch, MANA, cost, NOTHING, 0, WAIT_SPELL);
-		
-		if (ch == vict) {
-			msg_to_char(ch, "You pull out a grease pencil and mark each of your eyelids with an X...\r\nYou feel the gift of foresight!\r\n");
-			act("$n pulls out a grease pencil and marks each of $s eyelids with an X.", TRUE, ch, NULL, NULL, TO_ROOM);
-		}
-		else {
-			act("You pull out a grease pencil and mark each of $N's eyelids with an X, giving $M the gift of foresight.", FALSE, ch, NULL, vict, TO_CHAR);
-			act("$n marks each of your eyelids using a grease pencil...\r\nYou feel the gift of foresight!", FALSE, ch, NULL, vict, TO_VICT);
-			act("$n pulls out a grease pencil and marks each of $N's eyelids with an X.", FALSE, ch, NULL, vict, TO_NOTVICT);
-		}
-		
-		amt = CHOOSE_BY_ABILITY_LEVEL(levels, ch, ABIL_FORESIGHT) + GET_INTELLIGENCE(ch);
-		
-		af = create_mod_aff(ATYPE_FORESIGHT, 12 MUD_HOURS, APPLY_DODGE, amt, ch);
-		affect_join(vict, af, 0);
-		
-		gain_ability_exp(ch, ABIL_FORESIGHT, 15);
-
-		if (FIGHTING(vict) && !FIGHTING(ch)) {
-			engage_combat(ch, FIGHTING(vict), FALSE);
-		}
 	}
 }
 
@@ -1048,7 +1022,7 @@ ACMD(do_mirrorimage) {
 	
 	// longdesc is more complicated
 	if (GET_MORPH(ch)) {
-		sprintf(buf, "%s\r\n", MORPH_LONG_DESC(GET_MORPH(ch)));
+		sprintf(buf, "%s\r\n", get_morph_desc(ch, TRUE));
 	}
 	else if ((ocm = pick_custom_longdesc(ch))) {
 		sprintf(buf, "%s\r\n", ocm->msg);
@@ -1363,7 +1337,7 @@ ACMD(do_slow) {
 		// succeed
 	
 		act("$N grows lethargic and starts to glow gray as you shout the slow hex at $M!", FALSE, ch, NULL, vict, TO_CHAR);
-		act("$n shouts something at you... The world takes on a gray tone and you more lethargic.", FALSE, ch, NULL, vict, TO_VICT);
+		act("$n shouts something at you... The world takes on a gray tone and you become more lethargic.", FALSE, ch, NULL, vict, TO_VICT);
 		act("$n shouts some kind of hex at $N, who starts to move sluggishly and starts to glow gray!", FALSE, ch, NULL, vict, TO_NOTVICT);
 	
 		af = create_flag_aff(ATYPE_SLOW, CHOOSE_BY_ABILITY_LEVEL(levels, ch, ABIL_SLOW), AFF_SLOW, ch);
@@ -1425,8 +1399,8 @@ ACMD(do_vigor) {
 		}
 		else {
 			act("You focus your thoughts and say the word 'maktso', and $N suddenly seems refreshed.", FALSE, ch, NULL, vict, TO_CHAR);
-			act("$n closes $s eyes and says the word 'matkso', and you feel a sudden burst of vigor!", FALSE, ch, NULL, vict, TO_VICT);
-			act("$n closes $s eyes and says the word 'matkso', and $N suddenly seems refreshed.", FALSE, ch, NULL, vict, TO_NOTVICT);
+			act("$n closes $s eyes and says the word 'maktso', and you feel a sudden burst of vigor!", FALSE, ch, NULL, vict, TO_VICT);
+			act("$n closes $s eyes and says the word 'maktso', and $N suddenly seems refreshed.", FALSE, ch, NULL, vict, TO_NOTVICT);
 		}
 		
 		// check if vict is in combat
@@ -1463,7 +1437,7 @@ ACMD(do_vigor) {
 //// CHANTS ///////////////////////////////////////////////////////////////////
 
 RITUAL_SETUP_FUNC(start_chant_of_druids) {
-	if (!HAS_FUNCTION(IN_ROOM(ch), FNC_HENGE)) {
+	if (!room_has_function_and_city_ok(IN_ROOM(ch), FNC_HENGE)) {
 		msg_to_char(ch, "You can't perform the chant of druids unless you are at a henge.\r\n");
 		return FALSE;
 	}
@@ -1500,8 +1474,12 @@ RITUAL_SETUP_FUNC(start_chant_of_illusions) {
 		add_to_resource_list(&illusion_res, RES_OBJECT, o_IRIDESCENT_IRIS, 1, 0);
 	}
 	
-	if (!IS_ROAD(IN_ROOM(ch)) || !IS_COMPLETE(IN_ROOM(ch))) {
+	if (!IS_ROAD(IN_ROOM(ch))) {
 		msg_to_char(ch, "You can't perform the chant of illusions here.\r\n");
+		return FALSE;
+	}
+	if (!IS_COMPLETE(IN_ROOM(ch))) {
+		msg_to_char(ch, "Complete the building first.\r\n");
 		return FALSE;
 	}
 	if (!can_use_room(ch, IN_ROOM(ch), MEMBERS_AND_ALLIES)) {
@@ -1546,23 +1524,16 @@ RITUAL_SETUP_FUNC(start_chant_of_nature) {
 }
 
 RITUAL_FINISH_FUNC(perform_chant_of_nature) {
-	sector_data *new_sect, *preserve;
+	sector_data *preserve;
 	struct evolution_data *evo;
 	
 	// percentage is checked in the evolution data
 	if ((evo = get_evolution_by_type(SECT(IN_ROOM(ch)), EVO_MAGIC_GROWTH))) {
-		new_sect = sector_proto(evo->becomes);
 		preserve = (BASE_SECT(IN_ROOM(ch)) != SECT(IN_ROOM(ch))) ? BASE_SECT(IN_ROOM(ch)) : NULL;
 		
-		// messaging based on whether or not it's choppable
-		if (new_sect && has_evolution_type(new_sect, EVO_CHOPPED_DOWN)) {
-			msg_to_char(ch, "As you chant, a mighty tree springs from the ground!\r\n");
-			act("As $n chants, a mighty tree springs from the ground!", FALSE, ch, NULL, NULL, TO_ROOM);
-		}
-		else {
-			msg_to_char(ch, "As you chant, the plants around you grow with amazing speed!\r\n");
-			act("As $n chants, the plants around $m grow with amazing speed!", FALSE, ch, NULL, NULL, TO_ROOM);
-		}
+		// messaging
+		msg_to_char(ch, "As you chant, the plants around you grow with amazing speed!\r\n");
+		act("As $n chants, the plants around $m grow with amazing speed!", FALSE, ch, NULL, NULL, TO_ROOM);
 		
 		change_terrain(IN_ROOM(ch), evo->becomes);
 		if (preserve) {
@@ -1640,7 +1611,7 @@ RITUAL_SETUP_FUNC(start_ritual_of_teleportation) {
 			msg_to_char(ch, "Your home teleportation is still on cooldown.\r\n");
 			return FALSE;
 		}
-		else if (!(map = get_map_location_for(to_room))) {
+		else if (!(map = (GET_MAP_LOC(to_room) ? real_room(GET_MAP_LOC(to_room)->vnum) : NULL))) {
 			msg_to_char(ch, "You can't teleport home right now.\r\n");
 			return FALSE;
 		}
@@ -1656,7 +1627,7 @@ RITUAL_SETUP_FUNC(start_ritual_of_teleportation) {
 			subtype = GET_ROOM_VNUM(to_room);
 		}
 	}
-	else if (has_ability(ch, ABIL_CITY_TELEPORTATION) && (city = find_city_by_name(GET_LOYALTY(ch), argument))) {
+	else if (has_player_tech(ch, PTECH_TELEPORT_CITY) && (city = find_city_by_name(GET_LOYALTY(ch), argument))) {
 		subtype = GET_ROOM_VNUM(city->location);
 		
 		if (get_cooldown_time(ch, COOLDOWN_TELEPORT_CITY) > 0) {
@@ -1708,7 +1679,7 @@ RITUAL_FINISH_FUNC(perform_ritual_of_teleportation) {
 		++tries;
 	}
 	
-	if (!to_room || !can_teleport_to(ch, to_room, TRUE) || !(map = get_map_location_for(to_room))) {
+	if (!to_room || !can_teleport_to(ch, to_room, TRUE) || !(map = (GET_MAP_LOC(to_room) ? real_room(GET_MAP_LOC(to_room)->vnum) : NULL))) {
 		msg_to_char(ch, "Teleportation failed: you couldn't find a safe place to teleport.\r\n");
 	}
 	else if (!can_teleport_to(ch, map, FALSE)) {
@@ -1735,11 +1706,12 @@ RITUAL_FINISH_FUNC(perform_ritual_of_teleportation) {
 		greet_mtrigger(ch, NO_DIR);
 		greet_memory_mtrigger(ch);
 		greet_vtrigger(ch, NO_DIR);
+		msdp_update_room(ch);	// once we're sure we're staying
 	
 		gain_ability_exp(ch, ABIL_RITUAL_OF_TELEPORTATION, 50);
 	
 		if (IS_CITY_CENTER(IN_ROOM(ch))) {
-			gain_ability_exp(ch, ABIL_CITY_TELEPORTATION, 50);
+			gain_player_tech_exp(ch, PTECH_TELEPORT_CITY, 50);
 			add_cooldown(ch, COOLDOWN_TELEPORT_CITY, 15 * SECS_PER_REAL_MIN);
 		}
 		else if (ROOM_PRIVATE_OWNER(IN_ROOM(ch)) == GET_IDNUM(ch)) {
@@ -1897,7 +1869,7 @@ RITUAL_FINISH_FUNC(perform_ritual_of_detection) {
 			if (STATE(d) == CON_PLAYING && (targ = d->character) && targ != ch && !IS_NPC(targ) && !IS_IMMORTAL(targ)) {
 				if (find_city(GET_LOYALTY(ch), IN_ROOM(targ)) == city) {
 					found = TRUE;
-					msg_to_char(ch, "You sense %s at (%d, %d) %s\r\n", PERS(targ, targ, FALSE), X_COORD(IN_ROOM(targ)), Y_COORD(IN_ROOM(targ)), get_room_name(IN_ROOM(targ), FALSE));
+					msg_to_char(ch, "You sense %s at %s%s\r\n", PERS(targ, targ, FALSE), get_room_name(IN_ROOM(targ), FALSE), coord_display_room(ch, IN_ROOM(targ), FALSE));
 				}
 			}
 		}
@@ -1946,8 +1918,8 @@ RITUAL_SETUP_FUNC(start_siege_ritual) {
 
 
 RITUAL_FINISH_FUNC(perform_siege_ritual) {
-	void besiege_room(room_data *to_room, int damage);
-	bool besiege_vehicle(vehicle_data *veh, int damage, int siege_type);
+	void besiege_room(char_data *attacker, room_data *to_room, int damage, vehicle_data *by_vehicle);
+	bool besiege_vehicle(char_data *attacker, vehicle_data *veh, int damage, int siege_type, vehicle_data *by_vehicle);
 	extern vehicle_data *find_vehicle(int n);
 	extern bool validate_siege_target_room(char_data *ch, vehicle_data *veh, room_data *to_room);
 	extern bool validate_siege_target_vehicle(char_data *ch, vehicle_data *veh, vehicle_data *target);
@@ -1995,7 +1967,7 @@ RITUAL_FINISH_FUNC(perform_siege_ritual) {
 				trigger_distrust_from_hostile(ch, ROOM_OWNER(room_targ));
 			}
 			
-			besiege_room(room_targ, dam);
+			besiege_room(ch, room_targ, dam, NULL);
 			
 			if (SECT(room_targ) != secttype) {
 				msg_to_char(ch, "It is destroyed!\r\n");
@@ -2007,7 +1979,7 @@ RITUAL_FINISH_FUNC(perform_siege_ritual) {
 				trigger_distrust_from_hostile(ch, VEH_OWNER(veh_targ));
 			}
 			
-			besiege_vehicle(veh_targ, dam, SIEGE_MAGICAL);
+			besiege_vehicle(ch, veh_targ, dam, SIEGE_MAGICAL, NULL);
 		}
 		
 		gain_ability_exp(ch, ABIL_SIEGE_RITUAL, 33.4);
@@ -2039,7 +2011,7 @@ RITUAL_FINISH_FUNC(perform_devastation_ritual) {
 	int dist, iter;
 	int x, y;
 	
-	#define CAN_DEVASTATE(room)  ((ROOM_SECT_FLAGGED((room), SECTF_HAS_CROP_DATA) || (CAN_CHOP_ROOM(room) && get_depletion((room), DPLTN_CHOP) < config_get_int("chop_depletion"))) && !ROOM_AFF_FLAGGED((room), ROOM_AFF_HAS_INSTANCE))
+	#define CAN_DEVASTATE(room)  (((ROOM_SECT_FLAGGED((room), SECTF_HAS_CROP_DATA) && has_permission(ch, PRIV_HARVEST, room)) || (CAN_CHOP_ROOM(room) && has_permission(ch, PRIV_CHOP, room) && get_depletion((room), DPLTN_CHOP) < config_get_int("chop_depletion"))) && !ROOM_AFF_FLAGGED((room), ROOM_AFF_HAS_INSTANCE))
 	#define DEVASTATE_RANGE  3	// tiles
 
 	// check this room
@@ -2073,14 +2045,8 @@ RITUAL_FINISH_FUNC(perform_devastation_ritual) {
 			run_room_interactions(ch, to_room, INTERACT_HARVEST, devastate_crop);
 			run_room_interactions(ch, to_room, INTERACT_CHOP, devastate_trees);
 			
-			// check for original sect, which may have been stored
-			if (BASE_SECT(to_room) != SECT(to_room)) {
-				change_terrain(to_room, GET_SECT_VNUM(BASE_SECT(to_room)));
-			}
-			else {
-				// fallback sect
-				change_terrain(to_room, climate_default_sector[GET_CROP_CLIMATE(cp)]);
-			}
+			// change to default sect
+			change_terrain(to_room, climate_default_sector[GET_CROP_CLIMATE(cp)]);
 		}
 		else if (CAN_CHOP_ROOM(to_room) && get_depletion(to_room, DPLTN_CHOP) < config_get_int("chop_depletion")) {
 			run_room_interactions(ch, to_room, INTERACT_CHOP, devastate_trees);
@@ -2090,14 +2056,8 @@ RITUAL_FINISH_FUNC(perform_devastation_ritual) {
 			msg_to_char(ch, "You devastate the seeded field!\r\n");
 			act("$n's powerful ritual devastates the seeded field!", FALSE, ch, NULL, NULL, TO_ROOM);
 			
-			// check for original sect, which may have been stored
-			if (BASE_SECT(to_room) != SECT(to_room)) {
-				change_terrain(to_room, GET_SECT_VNUM(BASE_SECT(to_room)));
-			}
-			else {
-				// fallback sect
-				change_terrain(to_room, climate_default_sector[GET_CROP_CLIMATE(cp)]);
-			}
+			// check to default sect
+			change_terrain(to_room, climate_default_sector[GET_CROP_CLIMATE(cp)]);
 		}
 		else {
 			msg_to_char(ch, "The Devastation Ritual has failed.\r\n");

@@ -414,7 +414,7 @@ LIBRARY_SCMD(library_browse) {
 		HASH_ITER(hh, book_table, book, next_book) {
 			for (libr = book->in_libraries; libr; libr = libr->next) {
 				if (libr->location == GET_ROOM_VNUM(IN_ROOM(ch))) {
-					sprintf(buf + strlen(buf), "%d. %s (%s)\r\n", ++count, book->title, book->byline);
+					sprintf(buf + strlen(buf), "%d. %s\t0 (%s\t0)\r\n", ++count, book->title, book->byline);
 				}
 			}
 		}
@@ -722,8 +722,11 @@ ACMD(do_library) {
 		if (pos == NOTHING) {
 			msg_to_char(ch, "Invalid %s command.\r\n", types[subcmd]);
 		}
-		else if (IS_SET(library_command[pos].flags, LIBR_REQ_LIBRARY) && !HAS_FUNCTION(IN_ROOM(ch), FNC_LIBRARY)) {
+		else if (IS_SET(library_command[pos].flags, LIBR_REQ_LIBRARY) && !room_has_function_and_city_ok(IN_ROOM(ch), FNC_LIBRARY)) {
 			msg_to_char(ch, "You must be inside a library to do this.\r\n");
+		}
+		else if (IS_SET(library_command[pos].flags, LIBR_REQ_LIBRARY) && !check_in_city_requirement(IN_ROOM(ch), TRUE)) {
+			msg_to_char(ch, "This library must be in a city to do that.\r\n");
 		}
 		else if (!check_in_city_requirement(IN_ROOM(ch), TRUE)) {
 			msg_to_char(ch, "This building must be in a city to use it.\r\n");
@@ -761,7 +764,7 @@ void read_book(char_data *ch, obj_data *obj) {
 	else if (!(book = book_proto(GET_BOOK_ID(obj)))) {
 		msg_to_char(ch, "The book is old and badly damaged; you can't read it.\r\n");
 	}
-	else if (!consume_otrigger(obj, ch, OCMD_READ)) {
+	else if (!consume_otrigger(obj, ch, OCMD_READ, NULL)) {
 		return;
 	}
 	else {
