@@ -45,7 +45,7 @@ def telnet(client):
 
     reconnect = False
     while 1:
-        asyncio.sleep(1)
+        time.sleep(1)
         if reconnect:
             logged_in = False
             print("Reconnecting")
