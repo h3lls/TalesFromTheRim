@@ -1436,7 +1436,11 @@ void unlink_instance_entrance(room_data *room, struct instance_data *inst, bool 
 			}
 		}
 	}
+	log("Removing Falgs for instance:");
 	log("VNUM: %d", inst->id);
+	log("Adventure Name: %s", inst->adventure->name);
+	log("Shared Data: %d", SHARED_DATA(room));
+	log("Flags: %d", ROOM_AFF_FLAGS(room) );
 	// remove instance flags AFTER the script
 	REMOVE_BIT(ROOM_BASE_FLAGS(room), ROOM_AFF_HAS_INSTANCE);
 	REMOVE_BIT(ROOM_AFF_FLAGS(room), ROOM_AFF_HAS_INSTANCE);
