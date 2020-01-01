@@ -1436,7 +1436,7 @@ void unlink_instance_entrance(room_data *room, struct instance_data *inst, bool 
 			}
 		}
 	}
-		
+	log("VNUM: %d", inst->id);
 	// remove instance flags AFTER the script
 	REMOVE_BIT(ROOM_BASE_FLAGS(room), ROOM_AFF_HAS_INSTANCE);
 	REMOVE_BIT(ROOM_AFF_FLAGS(room), ROOM_AFF_HAS_INSTANCE);
