@@ -1,4 +1,5 @@
 - [Home](/?id=main)
+- [World Info / Lore](/world/README.md)
 - [Immortal Guides](/building/README.md)
 - [Developer Help](/developer/README.md)
 - **Links**
