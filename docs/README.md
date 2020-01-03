@@ -4,6 +4,8 @@
 
 A world living on the Rim of the galaxy.
 
+> [World Information](/world/README)
+
 > Please see the subsections for details on [Developer](/developer/README) or [Immortal help](/building/README)
 
 ## License
