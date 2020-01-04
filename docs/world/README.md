@@ -24,6 +24,8 @@ Rim World Alliance (RWA) - A now defunct organization that initially settled the
 
 * Rim Fighter (Fast Attack) - Ship used as a primary incursion / attack ship for making quick attacks on a larger foe. Nimble but lacking in heavy armament and with a power-plant that can only support a small amount of weaponry.
 * Rim Defense Ship - A small ship with a set of laser systems and heavy armor. Used primarily as a local defensive ship for repelling attacks.
+![Rim Fighter Top](rimfightertop.png ':size=200')
+![Rim Fighter Side](rimfighterside.png ':size=200')
 * Minehunter - A small ship with advanced detection systems and long range weaponry used to detonate mines or explosives.
 * Patrol Ship - Primarily used as a light fighter but has a large power-plant to perform quick jumps.
 * Stealth Ship - Advanced stealth, cloaking, and ID camouflage allows this ship to infiltrate most areas with ease, the long range sensors allow for a massive amount of information to be obtained quickly. There are only 2 known stealth ships still known to be in service.
