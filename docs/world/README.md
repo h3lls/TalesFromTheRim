@@ -35,6 +35,8 @@ Rim World Alliance (RWA) - A now defunct organization that initially settled the
 ## Specialized
 
 * Capital Ship - There only remains a single capital ship which has closed itself off from the rest of the union when the military broke from the RWA
+![Capital Ship Top](CapitalShipTop.png ':size=200')
+![Capital Ship Side](CapitalShipSide.png ':size=200')
 * Laser Satellite - Used as a platform that has a large power-plant and can deliver an enormous amount of firepower over a long distance.
 * Missile Satellite - Used primarily for planet bombardment, deterrent and as a platform for inter-rim attacks using ballistics.
 * Launch Platform - A small station used as a small refueling depot and launch platform off-rim destinations.
