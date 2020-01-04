@@ -1767,7 +1767,7 @@ ACMD(do_learned) {
 	bool is_emp, overflow, comma;
 	craft_data *craft;
 	size_t size, l_size, count;
-	
+	l_size = 0;
 	if (IS_NPC(ch)) {
 		msg_to_char(ch, "Mobs never learn.\r\n");
 		return;
