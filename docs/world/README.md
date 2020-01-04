@@ -23,9 +23,11 @@ Rim World Alliance (RWA) - A now defunct organization that initially settled the
 ### Light Craft
 
 * Rim Fighter (Fast Attack) - Ship used as a primary incursion / attack ship for making quick attacks on a larger foe. Nimble but lacking in heavy armament and with a power-plant that can only support a small amount of weaponry.
+
 ![Rim Fighter Top](rimfightertop.png ':size=200')
 ![Rim Fighter Side](rimfighterside.png ':size=200')
 * Rim Defense Ship - A small ship with a set of laser systems and heavy armor. Used primarily as a local defensive ship for repelling attacks.
+
 ![Rim Fighter Top](rimdefensetop.png ':size=200')
 ![Rim Fighter Side](rimdefenseside.png ':size=200')
 * Minehunter - A small ship with advanced detection systems and long range weaponry used to detonate mines or explosives.
@@ -38,7 +40,8 @@ Rim World Alliance (RWA) - A now defunct organization that initially settled the
 
 ## Specialized
 
-* Capital Ship - There only remains a single capital ship which has closed itself off from the rest of the union when the military broke from the RWA
+* Capital Ship - There only remains a single capital ship which has closed itself off from the rest of the union when the military broke from the RWA.
+
 ![Capital Ship Top](CapitalShipTop.png ':size=200')
 ![Capital Ship Side](CapitalShipSide.png ':size=200')
 * Laser Satellite - Used as a platform that has a large power-plant and can deliver an enormous amount of firepower over a long distance.
