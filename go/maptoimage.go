@@ -11,12 +11,14 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"math/rand"
 	"github.com/disintegration/imaging"
 )
 
+
 var CharMap = map[rune]color.RGBA{
 	'*': color.RGBA{238, 44, 44, 255},
-	'?': color.RGBA{238, 229, 222, 255},
+	'?': color.RGBA{30, 30, 30, 255},
 	
 	// banners/bright colors	
 	'0': color.RGBA{255, 255, 255, 255},	// white banner, rice, cotton
@@ -114,7 +116,11 @@ func createMap(inputFile string, outputImage string) {
 		x += 1;
 		txt := scanner.Text()
 		for idx, char := range(txt) {
-			img.Set(idx, x, CharMap[char]);
+			if (char == '?') && rand.Intn(180) == 1  {
+				img.Set(idx, x, color.RGBA{250, 250, 250, 255});
+			} else {
+				img.Set(idx, x, CharMap[char]);
+			}
 		}
 	}
 
