@@ -124,6 +124,7 @@
 #define PASSWORD_SALT  "mysaltybitch"
 
 // features for determining whether or not a map tile needs to be in RAM as a room_data*
+// Changed to space
 #define BASIC_OCEAN  30100	// sector vnum used as the base for fully ignorable and blank rooms
 #define TILE_KEEP_FLAGS  (SECTF_START_LOCATION)	// flags for rooms that MUST stay in RAM
 
