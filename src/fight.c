@@ -1148,12 +1148,18 @@ void death_cry(char_data *ch) {
 	room_data *rl, *to_room;
 	int iter;
 
-	act("Your blood freezes as you hear $n's death cry.", FALSE, ch, 0, 0, TO_ROOM);
-
+	// This is really space, people do not make noise in space
+	if (GET_SECT_VNUM(SECT(IN_ROOM(ch))) == BASIC_OCEAN) {
+		act("Your blood freezes as you see $n's soundless death cry.", FALSE, ch, 0, 0, TO_ROOM);
+	} else {
+		act("Your blood freezes as you hear $n's death cry.", FALSE, ch, 0, 0, TO_ROOM);
+	}
 	if (ROOM_IS_CLOSED(IN_ROOM(ch)) && COMPLEX_DATA(IN_ROOM(ch))) {
 		for (ex = COMPLEX_DATA(IN_ROOM(ch))->exits; ex; ex = ex->next) {
 			if (ex->room_ptr) {
-				send_to_room("Your blood freezes as you hear someone's death cry.\r\n", ex->room_ptr);
+				if (GET_SECT_VNUM(SECT(IN_ROOM(ch))) != BASIC_OCEAN) {
+					send_to_room("Your blood freezes as you hear someone's death cry.\r\n", ex->room_ptr);
+				}
 			}
 		}
 	}
@@ -1162,7 +1168,9 @@ void death_cry(char_data *ch) {
 		
 		for (iter = 0; iter < NUM_2D_DIRS; ++iter) {
 			if ((to_room = real_shift(rl, shift_dir[iter][0], shift_dir[iter][1]))) {
-				send_to_room("Your blood freezes as you hear someone's death cry.\r\n", to_room);
+				if (GET_SECT_VNUM(SECT(IN_ROOM(ch))) != BASIC_OCEAN) {
+					send_to_room("Your blood freezes as you hear someone's death cry.\r\n", to_room);
+				}
 			}
 		}
 	}
