@@ -1390,7 +1390,7 @@ extern int Y_COORD(room_data *room);	// formerly #define Y_COORD(room)  FLAT_Y_C
 #define IS_WATER_BUILDING(room)  (ROOM_BLD_FLAGGED((room), BLD_SAIL))
 #define WATER_SECT(room)		(ROOM_SECT_FLAGGED((room), SECTF_FRESH_WATER ) || ROOM_BLD_FLAGGED((room), BLD_NEED_BOAT) || RMT_FLAGGED((room), RMT_NEED_BOAT) || (IS_WATER_BUILDING(room) && !IS_COMPLETE(room) && SECT_FLAGGED(BASE_SECT(room), SECTF_FRESH_WATER)))
 #define DEEP_WATER_SECT(room)	(ROOM_SECT_FLAGGED((room), SECTF_OCEAN))
-
+#define SPACE_SECT(room)   (ROOM_SECT_FLAGGED((room), SECTF_SPACE))
 
  //////////////////////////////////////////////////////////////////////////////
 //// ROOM TEMPLATE UTILS /////////////////////////////////////////////////////
