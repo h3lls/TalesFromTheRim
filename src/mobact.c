@@ -461,6 +461,12 @@ bool mob_can_move_to_sect(char_data *mob, room_data *to_room) {
 			ok = TRUE;
 		}
 	}
+	// TODO: Determine if there are more modes of travel
+	else if (SECT_FLAGGED(sect, SECTF_SPACE)) {
+		if (move_type == MOB_MOVE_SPACE) {
+			ok = TRUE;
+		}
+	}
 	else if (SECT_FLAGGED(sect, SECTF_FRESH_WATER | SECTF_OCEAN)) {
 		if (MOB_FLAGGED(mob, MOB_AQUATIC) || move_type == MOB_MOVE_SWIM || move_type == MOB_MOVE_PADDLE) {
 			ok = TRUE;

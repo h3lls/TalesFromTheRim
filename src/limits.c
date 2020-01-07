@@ -605,6 +605,33 @@ void real_update_char(char_data *ch) {
 		extract_char(ch);
 		return;
 	}
+
+	// space damage
+	// TODO: Add some type of handling for when someone is in an air tight ship (maybe add a AFF affect for damage to the suit / ship)
+	if (!IS_RIDING(ch) && !IS_IMMORTAL(ch) && ROOM_SECT_FLAGGED(IN_ROOM(ch), SECTF_SPACE)) {
+	
+		int iter;
+		// list of valid slots; terminate with -1
+		int slots[] = { WEAR_CLOTHES, WEAR_ARMOR, -1 };
+		bool has_spacesuit;
+		
+		has_spacesuit = FALSE;
+		
+		for (iter = 0; slots[iter] != -1; ++iter) {
+			if (GET_EQ(ch, slots[iter]) && OBJ_FLAGGED(GET_EQ(ch, slots[iter]), OBJ_SPACE)) {
+				has_spacesuit = TRUE;
+			}
+		}
+
+		if (!has_spacesuit) {
+			if (!affected_by_spell(ch, ATYPE_DOT)) {
+				msg_to_char(ch, "The lack of air, pressure, and temperature here is causing you significant pain...\r\n");
+				act("$n appears to be asphyxiating.", FALSE, ch, 0, 0, TO_ROOM);
+			}
+			apply_dot_effect(ch, ATYPE_DOT, 6, DAM_PHYSICAL, 5, 60, ch);			
+		}
+	}
+
 	// earthmeld damage
 	if (!IS_NPC(ch) && !IS_IMMORTAL(ch) && AFF_FLAGGED(ch, AFF_EARTHMELD) && ROOM_IS_CLOSED(IN_ROOM(ch))) {
 		if (!affected_by_spell(ch, ATYPE_NATURE_BURN)) {
@@ -1550,7 +1577,7 @@ void point_update_obj(obj_data *obj) {
 			}
 		}
 	}
-
+	// TODO: Add floating in space in random direction
 	// float or sink
 	if (IN_ROOM(obj) && CAN_WEAR(obj, ITEM_WEAR_TAKE) && ROOM_SECT_FLAGGED(IN_ROOM(obj), SECTF_FRESH_WATER | SECTF_OCEAN)) {
 		if (materials[GET_OBJ_MATERIAL(obj)].floats && (to_room = real_shift(IN_ROOM(obj), shift_dir[WEST][0], shift_dir[WEST][1]))) {

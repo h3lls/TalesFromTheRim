@@ -2080,6 +2080,7 @@ const char *mob_move_types[] = {
 	"shuffles",
 	"marches",
 	"sweeps",
+	"space",
 	"\n"
 };
 
@@ -2292,6 +2293,7 @@ const char *extra_bits[] = {
 	"GENERIC-DROP",
 	"!STORE",	// 25
 	"SEEDED",
+	"SPACE",
 	"\n"
 };
 
@@ -2325,6 +2327,7 @@ const char *extra_bits_inv_flags[] = {
 	"",	// generic-drop
 	"",	// no-store
 	"",	// seeded
+	"", // space
 	"\n"
 };
 
@@ -2358,6 +2361,7 @@ const double obj_flag_scaling_bonus[] = {
 	1.0,	// OBJ_GENERIC_DROP
 	1.0,	// OBJ_NO_STORE
 	1.0,	// OBJ_SEEDED
+	1.0,	// OBJ_SPACE
 };
 
 
@@ -3284,6 +3288,7 @@ const char *sector_flags[] = {
 		"*",
 	"ROUGH",
 	"SHALLOW-WATER",
+	"SPACE",
 	"\n"
 };
 

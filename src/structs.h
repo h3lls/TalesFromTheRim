@@ -1514,6 +1514,7 @@ typedef struct vehicle_data vehicle_data;
 #define MOB_MOVE_SHUFFLES  34
 #define MOB_MOVE_MARCHES  35
 #define MOB_MOVE_SWEEPS  36
+#define MOB_MOVE_SPACE  37
 
 
 // name sets: add matching files in lib/text/names/
@@ -1706,6 +1707,7 @@ typedef struct vehicle_data vehicle_data;
 #define OBJ_GENERIC_DROP  BIT(24)	// y. blocks the hard/group drop flags
 #define OBJ_NO_STORE  BIT(25)	// z. cannot be stored
 #define OBJ_SEEDED  BIT(26)	// A. has already been seeded
+#define OBJ_SPACE  BIT(27)	// B. Provides a way to breath and protects in space
 
 #define OBJ_BIND_FLAGS  (OBJ_BIND_ON_EQUIP | OBJ_BIND_ON_PICKUP)	// all bind-on flags
 #define OBJ_PRESERVE_FLAGS  (OBJ_HARD_DROP | OBJ_GROUP_DROP | OBJ_SUPERIOR | OBJ_KEEP | OBJ_NO_STORE | OBJ_SEEDED | OBJ_BIND_FLAGS)	// flags that are preserved
@@ -2310,6 +2312,7 @@ typedef struct vehicle_data vehicle_data;
 	#define SECTF_UNUSED1  BIT(20)
 #define SECTF_ROUGH  BIT(21)	// hard terrain, requires ATR; other mountain-like properties
 #define SECTF_SHALLOW_WATER  BIT(22)	// can't earthmeld; other properties like swamp and oasis have
+#define SECTF_SPACE  BIT(23)	// Must have portable air and a propellant
 
 
  //////////////////////////////////////////////////////////////////////////////
