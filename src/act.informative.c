@@ -1355,6 +1355,16 @@ char *get_obj_desc(obj_data *obj, char_data *ch, int mode) {
 					strcat(output, " is sinking fast.");
 				}
 			}
+			else if (IN_ROOM(obj) && ROOM_SECT_FLAGGED(IN_ROOM(obj), SECTF_SPACE)) {	// Floating in space
+				if (*sdesc) {
+					// custom short desc
+					sprintf(output, "%s is floating here.", CAP(sdesc));
+				}
+				else {
+					// normal long desc
+					strcpy(output, GET_OBJ_LONG_DESC(obj));
+				}
+			}
 			else {	// NOT floating in water, or not in a room at all
 				if (*sdesc) {
 					// custom short desc

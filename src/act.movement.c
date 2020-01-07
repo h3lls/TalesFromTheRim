@@ -440,7 +440,7 @@ void gain_ability_exp_from_moves(char_data *ch, room_data *was_in, bitvector_t f
 	if (IS_RIDING(ch)) {
 		gain_player_tech_exp(ch, PTECH_RIDING, 1);
 		
-		if (ROOM_SECT_FLAGGED(IN_ROOM(ch), SECTF_FRESH_WATER | SECTF_OCEAN | SECTF_ROUGH)) {
+		if (ROOM_SECT_FLAGGED(IN_ROOM(ch), SECTF_FRESH_WATER | SECTF_OCEAN | SECTF_ROUGH | SECTF_SPACE)) {
 			gain_player_tech_exp(ch, PTECH_RIDING_UPGRADE, 5);
 		}
 		if (EFFECTIVELY_FLYING(ch)) {
@@ -1692,7 +1692,7 @@ ACMD(do_circle) {
 		}
 		
 		// check invalid terrain in the way
-		if (ROOM_SECT_FLAGGED(to_room, SECTF_FRESH_WATER | SECTF_OCEAN | SECTF_ROUGH)) {
+		if (ROOM_SECT_FLAGGED(to_room, SECTF_FRESH_WATER | SECTF_OCEAN | SECTF_ROUGH | SECTF_SPACE)) {
 			msg_to_char(ch, "You can't circle that way.\r\n");
 			ok = FALSE;
 			break;
@@ -2631,6 +2631,8 @@ ACMD(do_worm) {
 		msg_to_char(ch, "You can't go that way!\r\n");
 	else if (ROOM_SECT_FLAGGED(to_room, SECTF_FRESH_WATER | SECTF_OCEAN | SECTF_SHALLOW_WATER) || SECT_FLAGGED(BASE_SECT(to_room), SECTF_FRESH_WATER | SECTF_OCEAN | SECTF_SHALLOW_WATER))
 		msg_to_char(ch, "You can't pass through the water!\r\n");
+	else if (ROOM_SECT_FLAGGED(to_room, SECTF_SPACE) || SECT_FLAGGED(BASE_SECT(to_room), SECTF_SPACE))
+		msg_to_char(ch, "You can't pass through space!\r\n");
 	else if (GET_MOVE(ch) < 1)
 		msg_to_char(ch, "You don't have enough energy left to do that.\r\n");
 	else if (ABILITY_TRIGGERS(ch, NULL, NULL, ABIL_WORM)) {

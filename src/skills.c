@@ -2535,7 +2535,7 @@ void perform_npc_tie(char_data *ch, char_data *victim, int subcmd) {
 	else if (!(rope = get_component_in_list(CMP_ROPE, NOBITS, ch->carrying, &kept))) {
 		msg_to_char(ch, "You don't seem to have any rope%s.\r\n", kept ? " that isn't marked 'keep'" : "");
 	}
-	else if (ROOM_SECT_FLAGGED(IN_ROOM(ch), SECTF_FRESH_WATER | SECTF_OCEAN))
+	else if (ROOM_SECT_FLAGGED(IN_ROOM(ch), SECTF_FRESH_WATER | SECTF_OCEAN | SECTF_SPACE))
 		msg_to_char(ch, "You can't tie it here.\r\n");
 	else {
 		act("You tie $N up.", FALSE, ch, 0, victim, TO_CHAR);
