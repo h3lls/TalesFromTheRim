@@ -608,7 +608,7 @@ void real_update_char(char_data *ch) {
 
 	// space damage
 	// TODO: Add some type of handling for when someone is in an air tight ship (maybe add a AFF affect for damage to the suit / ship)
-	if (!IS_RIDING(ch) && !IS_IMMORTAL(ch) && ROOM_SECT_FLAGGED(IN_ROOM(ch), SECTF_SPACE)) {
+	if (!MOB_FLAGGED(ch, MOB_SPACE) && !IS_RIDING(ch) && !IS_IMMORTAL(ch) && ROOM_SECT_FLAGGED(IN_ROOM(ch), SECTF_SPACE)) {
 	
 		int iter;
 		// list of valid slots; terminate with -1
