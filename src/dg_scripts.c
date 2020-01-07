@@ -2020,7 +2020,8 @@ void script_log_by_type(int go_type, void *go, const char *format, ...) {
 	switch (go_type) {
 		case MOB_TRIGGER: {
 			strcpy(type, "Mob");
-			strcpy(name, GET_SHORT((char_data*)go));
+			//strcpy(name, );//);
+			sprintf(name, "%s - %d", GET_SHORT((char_data*)go), GET_POS((char_data*)go));
 			vnum = GET_MOB_VNUM((char_data*)go);
 			break;
 		}
@@ -2671,7 +2672,7 @@ void find_replacement(void *go, struct script_data *sc, trig_data *trig, int typ
 					
 					if (subfield && *subfield && (targ_room = get_room(get_room_by_script(type, go), subfield))) {
 						if (SHARED_DATA(targ_room) && SHARED_DATA(targ_room) == &ocean_shared_data) {
-							script_log("Trigger: %s, VNum %d, instance.set_location: unable to set location to '%d %s': location is in the ocean or is sharing data", GET_TRIG_NAME(trig), GET_TRIG_VNUM(trig), GET_ROOM_VNUM(targ_room), get_room_name(targ_room, FALSE));
+							script_log("Instance Location: (%d, %d) Trigger: %s, VNum %d, instance.set_location: unable to set location to '%d %s': location is in the ocean or is sharing data", FLAT_X_COORD(targ_room), FLAT_Y_COORD(targ_room), GET_TRIG_NAME(trig), GET_TRIG_VNUM(trig), GET_ROOM_VNUM(targ_room), get_room_name(targ_room, FALSE));
 						}
 						else {
 							set_instance_fake_loc(inst, targ_room);
