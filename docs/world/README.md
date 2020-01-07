@@ -2,6 +2,14 @@
 
 Rim World Alliance (RWA) - A now defunct organization that initially settled the rim worlds and created most of the instrastructure that is crumbling. They failed 30 years ago due to political strife and each Rim world splintering off into their own factions.
 
+# Flora & Fauna
+
+## Known Space Entities
+
+* Ikaroa - An enormous fish that floats through the known universe, while alive it produces a plasma field it uses to propel itself. There are rumors of it being a magical creature but on death it appears to be similar to a normal fish and doesn't seem to possess any way of producing the plasma field or anything other than what you would find in a normal terrestrial fish. It was named after the legend of the Goddess Ikaroa from Māori mythos.
+
+![Ikaroa](ikaroa.png 'size=400')
+
 # Spacecraft
 
 ## Military
