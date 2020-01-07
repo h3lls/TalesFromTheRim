@@ -919,6 +919,11 @@ int can_move(char_data *ch, int dir, room_data *to_room, bitvector_t flags) {
 			return 0;
 		}
 	}
+
+	if (MOB_FLAGGED(ch, MOB_SPACE) && !SPACE_SECT(to_room) && !EFFECTIVELY_FLYING(ch)) {
+		msg_to_char(ch, "You can't go on land or water!\r\n");
+		return 0;
+	}
 	
 	if (MOB_FLAGGED(ch, MOB_AQUATIC) && !WATER_SECT(to_room) && !EFFECTIVELY_FLYING(ch)) {
 		msg_to_char(ch, "You can't go on land!\r\n");

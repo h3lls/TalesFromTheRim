@@ -2025,6 +2025,7 @@ const char *action_bits[] = {
 	"!EXP",
 	"!RESCALE",
 	"SILENT",
+	"SPACE",
 	"\n"
 };
 
