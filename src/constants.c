@@ -87,7 +87,7 @@ const char *level_names[][2] = {
 // TODO could move to a file
 const int num_of_reboot_strings = 3;
 const char *reboot_strings[] = {
-	"   EmpireMUD is performing a reboot. This process generally takes ten to\r\n"
+	"   Tales from the Rim is performing a reboot. This process generally takes ten to\r\n"
 	"fifteen seconds and will not disconnect you. Most character actions are\r\n"
 	"not affected, although fighting will stop.\r\n",
 
