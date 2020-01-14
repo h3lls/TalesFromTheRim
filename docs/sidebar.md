@@ -1,5 +1,6 @@
 - [Home](/?id=main)
 - [World Info / Lore](/world/README.md)
+- [Vehicles](/vehicles/README.md)
 - [Immortal Guides](/building/README.md)
 - [Developer Help](/developer/README.md)
 - **Links**

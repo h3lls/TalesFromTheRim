@@ -2,9 +2,10 @@
 
 ![Green Planet](greenplanet.png ':size=800')
 
-A world living on the Rim of the galaxy.
+### Living on the Rim of the galaxy.
 
-> [World Information](/world/README)
+* [World Info / Lore](/world/README)
+* [Vehicles](/vehicles/README)
 
 > Please see the subsections for details on [Developer](/developer/README) or [Immortal help](/building/README)
 
