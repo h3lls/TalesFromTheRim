@@ -2,9 +2,17 @@
 
 ## Political Entities
 
-![Rim World Alliance](rwalogo2.png ':size=200')
+![Rim World Alliance](rwalogo2.png ':size=300')
 
 Rim World Alliance (RWA) - A now defunct organization that initially settled the Rim worlds and created most of the infrastructure that is crumbling. They failed 30 years ago due to political strife and each Rim world splintering off into their own factions.
+
+![Eastern Rim Planet Alliance](erpalogo.png ':size=200')
+
+Eastern Rim Planet Alliance - A democratic collective that makes up the far eastern portion of the rim planets. They are in a constant struggle with one another trying to overtake several small Rim planetoids.
+
+![Dionysus Corridor Enterprise](dcelogo.png ':size=200')
+
+Dionysus Corridor Enterprise - A trade conglomerate based in the Dionysus corridor, They have control of a slipstream network of unknown origin. Control of the slipstream mean they control a large amount of the Rim's travel. They offer a massive operation to buy, sell, store, and move goods across almost all Rim planetoids. They offer the ability to franchise their operations to open a small shop.
 
 ## History
 
